@@ -1,0 +1,13 @@
+[target.thumbv6m-none-eabi]
+runner = "sudo picotool load -x -t elf"
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+]
+
+
+[alias]
+pico = "build --package tacklebox-pico --target thumbv6m-none-eabi"
+pico-run = "run --package tacklebox-pico --target thumbv6m-none-eabi"
+
+client = "build --package tacklebox-client"
+client-run = "run --package tacklebox-client"
