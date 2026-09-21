@@ -1618,6 +1618,7 @@ version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
  "embassy-executor",
+ "embassy-futures",
  "embassy-rp",
  "embassy-sync",
  "embassy-time",

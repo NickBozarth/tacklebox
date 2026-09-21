@@ -1,11 +1,12 @@
 use core::fmt::Write;
 use embassy_executor::Spawner;
+use embassy_futures::select::{self, select};
 use embassy_rp::{Peri, bind_interrupts, flash::Flash, peripherals::{FLASH, USB}, usb::InterruptHandler};
-use embassy_sync::once_lock::OnceLock;
-use embassy_usb::{Builder, Config, UsbDevice, class::cdc_acm::{CdcAcmClass, State}, driver::EndpointError};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, once_lock::OnceLock, signal::Signal};
+use embassy_usb::{Builder, Config, UsbDevice, class::cdc_acm::{CdcAcmClass, State}};
 use heapless::String;
 use static_cell::StaticCell;
-use tacklebox_core::communication::{commands::Command, packet::{MAX_PACKET_SIZE, PacketData}};
+use tacklebox_core::communication::{commands::{Command, Response}, packet::{MAX_PACKET_SIZE, PacketData}};
 
 use crate::communication::{channels::GlobalCommand, connection::{Connection, ConnectionType}, errors::{CommunicationError, CommunicationResult, ConnectionError, ConnectionResult}};
 
@@ -13,7 +14,7 @@ use crate::communication::{channels::GlobalCommand, connection::{Connection, Con
 
 type UsbDriver = embassy_rp::usb::Driver<'static, embassy_rp::peripherals::USB>;
 struct FlashId(&'static str);
-
+static USB_STOP_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 bind_interrupts!(struct UsbIrqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
@@ -102,26 +103,37 @@ impl UsbConnection {
         )
     }
 
+
+    /*
+     * Runs the UsbDevice 
+     * Device may be disabled with a signal sent to USB_STOP_SIGNAL
+     */
     fn spawn_usb_task(builder: Builder<'static, UsbDriver>, spawner: &Spawner) -> ConnectionResult<()> {
         let usb = builder.build();
 
         #[embassy_executor::task]
-        async fn usb_task(mut usb: UsbDevice<'static, UsbDriver>) -> ! {
-            usb.run().await
+        async fn usb_task(mut usb: UsbDevice<'static, UsbDriver>) {
+            match select(usb.run(), USB_STOP_SIGNAL.wait()).await {
+                select::Either::First(_) => unreachable!(),
+                select::Either::Second(_) => {
+                    usb.disable().await;
+                }
+            }
         }
 
         spawner.spawn(usb_task(usb).map_err(
             |_| ConnectionError::TaskSpawnError
         )?);
 
+
         Ok(())
     }
 }
 
 impl ConnectionType for UsbConnection {
-    async fn send_packet(&mut self, data: &[u8]) -> super::errors::CommunicationResult<usize> {
+    async fn send_packet(&mut self, data: PacketData) -> super::errors::CommunicationResult<usize> {
         self.class
-            .write_packet(data)
+            .write_packet(&data)
             .await
             .map(|_| data.len())
             .map_err(|e| e.into())
@@ -141,17 +153,38 @@ impl ConnectionType for UsbConnection {
 
 #[embassy_executor::task]
 async fn usb_io_task(mut connection: Connection<UsbConnection>) {
-    loop {
+    'connection_loop: loop {
         let response = connection.recieve_command()
             .await
             .unwrap_or(Command::InternalError)
             .send_global_command()
             .await;
-        connection.send_response(response).await;
+
+        'process_responses: loop {
+            match connection.send_response(&response).await {
+                /* Resend response if timeout */
+                Err(CommunicationError::Timeout) => (),
+                /* Break recieve loop and cleanup if disabled */
+                Err(CommunicationError::DeviceDisabled) => break 'connection_loop,
+                _ => break 'process_responses
+            }
+        }
+
+        if response == Response::ShutdownConnection {
+            break 'connection_loop;
+        }
     }
+
+
+    /* USB device shutdown process */
+    USB_STOP_SIGNAL.signal(());
 }
 
 
+/* 
+ * Task that handles all io and potential destruction of connection
+ * NOTE embassy_executor::task cannot use generics
+ */
 impl Connection<UsbConnection> {
     pub fn spawn_io_task(self, spawner: &Spawner) -> ConnectionResult<()> {
         spawner.spawn(usb_io_task(self).map_err(

@@ -17,17 +17,14 @@ async fn main() -> tokio_serial::Result<()> {
 
     println!("Opened {dev_path}");
 
-    let mut buffer = [0u8; MAX_PACKET_SIZE];
-
-    
     let mut i = 0;
     let mut buf = [0u8; MAX_PACKET_SIZE];
 
     loop {
-        let command_pd: PacketData = Command::EchoU8(i).into();
+        let command_pd = PacketData::from(Command::EchoU8(i));
         port.write(&command_pd).await.expect("Failed write");
         let len = port.read(&mut buf).await.expect("Failed read");
-        let response: Response = PacketData::new(buf, len).into();
+        let response = Response::from(PacketData::new(buf, len));
         println!("Buf read [{:?}]", response);
 
 

@@ -8,7 +8,7 @@ use embassy_rp as _;
 use panic_halt as _;
 use tacklebox_core::communication::commands::{Command, Response};
 
-use crate::communication::{channels::{CMD_CHANNEL, PendingCommand}, connection::Connection, usb::UsbConnection};
+use crate::communication::{channels::{CMD_CHANNEL, PendingCommand}, usb::UsbConnection};
 
 
 
@@ -16,11 +16,16 @@ fn process_command(command: Command) -> Response {
     match command {
         Command::InvalidCommand => Response::InvalidCommand,
         Command::InternalError => Response::InternalError,
-        Command::EchoU8(n) => Response::EchoU8Resp(n)
+        Command::EchoU8(n) => Response::EchoU8Resp(n),
+        Command::ShutdownConnection => Response::ShutdownConnection
     }
 }
 
 
+/*
+ * General setup for spawning usb connection
+ * May panic on startup
+ */
 fn spawn_usb_connection(spawner: &Spawner) {
     let p = embassy_rp::init(Default::default());
 
@@ -32,7 +37,7 @@ fn spawn_usb_connection(spawner: &Spawner) {
     .unwrap();
 
 
-    conn.spawn_io_task(&spawner);
+    conn.spawn_io_task(&spawner).unwrap();
 }
 
 
