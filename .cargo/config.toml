@@ -11,3 +11,4 @@ pico-run = "run --package tacklebox-pico --target thumbv6m-none-eabi"
 
 client = "build --package tacklebox-client"
 client-run = "run --package tacklebox-client"
+client-test = "test --package tacklebox-client"
