@@ -12,6 +12,7 @@ use crate::communication::{channels::{CMD_CHANNEL, PendingCommand}, usb::UsbConn
 
 
 
+/* TODO move to a dedicated command executor mod? */
 fn process_command(command: Command) -> Response {
     match command {
         Command::InvalidCommand => Response::InvalidCommand,
@@ -30,12 +31,12 @@ fn process_command(command: Command) -> Response {
 /*
  * General setup for spawning usb connection
  * NOTE May panic on startup
- * TODO implement errors channel that a client can read from
+ * TODO implement errors channel that a client can read from insead of panicking
  */
 fn spawn_usb_connection(spawner: &Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    let conn = UsbConnection::new(
+    let conn = UsbConnection::new_connection(
         p.USB,
         p.FLASH,
         &spawner

@@ -1,5 +1,5 @@
 use core::fmt::Write;
-use embassy_executor::Spawner;
+use embassy_executor::{SpawnError, SpawnToken, Spawner};
 use embassy_futures::select::{self, select};
 use embassy_rp::{Peri, bind_interrupts, flash::Flash, peripherals::{FLASH, USB}, usb::InterruptHandler};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, once_lock::OnceLock, signal::Signal};
@@ -8,7 +8,7 @@ use heapless::String;
 use static_cell::StaticCell;
 use tacklebox_core::communication::{commands::{Command, Response}, packet::{MAX_PACKET_SIZE, PacketData}};
 
-use crate::communication::{channels::GlobalCommand, connection::{Connection, ConnectionType}, errors::{CommunicationError, CommunicationResult, ConnectionError, ConnectionResult}};
+use crate::communication::{channels::GlobalCommand, connection::{self, Connection, ConnectionType}, errors::{CommunicationError, CommunicationResult, ConnectionError, ConnectionResult}};
 
 
 
@@ -31,11 +31,16 @@ pub struct UsbConnection {
 }
 
 impl UsbConnection {
-    pub fn new(
+    pub fn new_connection(
         usb_perif: Peri<'static, USB>,
         flash_perif: Peri<'_, FLASH>,
         spawner: &Spawner
     ) -> ConnectionResult<Connection<Self>> {
+        /*
+         * Build everything needed for a CdcAcmClass and UsbDevice
+         * AND
+         * start the UsbDevice so we can listen on the connection
+         */
         let driver = UsbDriver::new(usb_perif, UsbIrqs);
         let flash_id = Self::get_flash_id(flash_perif)?;
         let config = Self::new_config(flash_id);
@@ -48,7 +53,8 @@ impl UsbConnection {
             MAX_PACKET_SIZE as u16
         );
 
-        Self::spawn_usb_task(builder, spawner)?;
+        let usb_device = builder.build();
+        Self::spawn_usb_task(usb_device, spawner)?;
 
         Ok(Connection::new(Self { class }))
     }
@@ -84,6 +90,7 @@ impl UsbConnection {
         let mut config = Config::new(RPI_SERIAL_VID, RPI_PICO_SERIAL_PID);
         config.manufacturer = Some("Raspberry Pi");
         config.product = Some("Pico USB Serial");
+        /* flash_id is used here in place of a serial number as a unique identifier */
         config.serial_number = Some(flash_id.0);
         config.max_power = 100;
         config.max_packet_size_0 = 64;
@@ -111,11 +118,8 @@ impl UsbConnection {
     /*
      * Runs the UsbDevice 
      * Device may be disabled with a UsbDevCommand::Stop send to USB_COMMAND_SIGNAL
-     * Device may be flushed with a UsbDevCommand::FlushBuffer send to USB_COMMAND_SIGNAL
      */
-    fn spawn_usb_task(builder: Builder<'static, UsbDriver>, spawner: &Spawner) -> ConnectionResult<()> {
-        let usb = builder.build();
-
+    fn spawn_usb_task(usb_device: UsbDevice<'static, UsbDriver>, spawner: &Spawner) -> ConnectionResult<()> {
         #[embassy_executor::task]
         async fn usb_task(mut usb: UsbDevice<'static, UsbDriver>) {
             loop {
@@ -133,7 +137,7 @@ impl UsbConnection {
             }
         }
 
-        spawner.spawn(usb_task(usb).map_err(
+        spawner.spawn(usb_task(usb_device).map_err(
             |_| ConnectionError::TaskSpawnError
         )?);
 
@@ -164,7 +168,19 @@ impl ConnectionType for UsbConnection {
 
 
     fn spawn_io_task(connection: Connection<Self>, spawner: &Spawner) -> ConnectionResult<()> {
-        spawner.spawn(usb_io_task(connection).map_err(
+        /* 
+         * Task that handles all io and potential destruction of connection
+         * NOTE embassy_executor::task cannot use generics
+         */
+        #[embassy_executor::task]
+        async fn io_task(connection: Connection<UsbConnection>) {
+            connection.handle_io().await;
+        }
+
+        
+        io_task;
+
+        spawner.spawn(io_task(connection).map_err(
             |_| ConnectionError::IoTaskSpawnError
         )?);
 
@@ -175,13 +191,4 @@ impl ConnectionType for UsbConnection {
         USB_COMMAND_SIGNAL.signal(UsbDevCommand::Stop);
         Ok(())
     }
-}
-
-/* 
- * Task that handles all io and potential destruction of connection
- * NOTE embassy_executor::task cannot use generics
- */
-#[embassy_executor::task]
-async fn usb_io_task(connection: Connection<UsbConnection>) {
-    connection.handle_io().await;
 }
