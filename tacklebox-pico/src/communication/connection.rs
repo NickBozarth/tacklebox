@@ -1,8 +1,8 @@
-use embassy_executor::Spawner;
+use embassy_executor::{SpawnError, SpawnToken, Spawner};
 use embassy_time::{Duration, with_timeout};
 use tacklebox_core::communication::{commands::{Command, Response}, packet::PacketData};
 
-use crate::communication::{channels::GlobalCommand, errors::{CommunicationError, CommunicationResult, ConnectionResult}};
+use crate::communication::{channels::GlobalCommand, errors::{CommunicationError, CommunicationResult, ConnectionError, ConnectionResult}};
 
 
 /* All a connection type needs to do is send and recieve PacketData */
@@ -10,8 +10,38 @@ pub trait ConnectionType: Sized {
     fn send_packet(&mut self, data: PacketData) -> impl Future<Output = CommunicationResult<usize>>;
     fn recieve_packet(&mut self) -> impl Future<Output = CommunicationResult<PacketData>>;
 
-    fn spawn_io_task(connection: Connection<Self>, spawner: &Spawner) -> ConnectionResult<()>;
+    fn get_io_task() -> impl IoTask<Self>;
     fn shutdown_connection(self) -> ConnectionResult<()>;
+}
+
+/* 
+ * Task that handles all io and potential destruction of connection
+ * NOTE embassy_executor::task cannot use generics and this is the workaround
+ */
+pub trait IoTask<T: ConnectionType> {
+    fn call_task(&self, connection: Connection<T>) -> Result<SpawnToken<impl Sized>, SpawnError>;
+
+    fn spawn_io_task(self, connection: Connection<T>, spawner: &Spawner) -> ConnectionResult<()>;
+}
+
+impl <T, F, S> IoTask<T> for F
+where
+    T: ConnectionType,
+    F: Fn(Connection<T>) -> Result<SpawnToken<S>, SpawnError>,
+    S: Sized
+{
+    fn call_task(&self, connection: Connection<T>) -> Result<SpawnToken<impl Sized>, SpawnError> {
+        (self)(connection)
+    }
+
+    fn spawn_io_task(self, connection: Connection<T>, spawner: &Spawner) -> ConnectionResult<()> {
+        spawner.spawn(
+            self.call_task(connection)
+                .map_err(|_| ConnectionError::IoTaskSpawnError)?
+        );
+
+        Ok(())
+    }
 }
 
 
@@ -85,6 +115,7 @@ impl <T: ConnectionType> Connection<T> {
 
 
     pub fn spawn_io_task(self, spawner: &Spawner) -> ConnectionResult<()> {
-        T::spawn_io_task(self, spawner)
+        let io_task = T::get_io_task();
+        io_task.spawn_io_task(self, spawner)
     }
 }

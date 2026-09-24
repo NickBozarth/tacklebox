@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 
 use crate::communication::packet::{MAX_PACKET_SIZE, PacketData};
 
