@@ -21,10 +21,10 @@ async fn main() -> tokio_serial::Result<()> {
     let mut buf = [0u8; MAX_PACKET_SIZE];
 
     loop {
-        let command_pd = PacketData::from(Command::EchoU8(i));
+        let command_pd = Command::EchoU8(i).to_packet_data();
         port.write(&command_pd).await.expect("Failed write");
         let len = port.read(&mut buf).await.expect("Failed read");
-        let response = Response::from(PacketData::new(buf, len));
+        let response = PacketData::new(buf, len).to_response();
         println!("Buf read [{:?}]", response);
 
 

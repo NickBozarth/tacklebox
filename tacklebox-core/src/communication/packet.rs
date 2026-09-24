@@ -1,5 +1,10 @@
 use core::ops::Deref;
 
+#[cfg(feature = "host")]
+use crate::communication::commands::Command;
+#[cfg(feature = "client")]
+use crate::communication::commands::Response;
+
 pub const MAX_PACKET_SIZE: usize = 64usize;
 
 pub struct PacketData {
@@ -23,5 +28,25 @@ impl Deref for PacketData {
 
     fn deref(&self) -> &Self::Target {
         self.as_slice()
+    }
+}
+
+
+impl PacketData {
+    /*
+     * Define ways to deserialize PacketData to a struct
+     * Client can  PacketData.to_response() -> Response
+     * Host   can  PacketData.to_command() -> Command
+     */
+    #[cfg(feature = "host")]
+    pub fn to_command(&self) -> Command {
+        postcard::from_bytes(self)
+            .unwrap_or(Command::default())
+    }
+
+    #[cfg(feature = "client")]
+    pub fn to_response(&self) -> Response {
+        postcard::from_bytes(self)
+            .unwrap_or(Response::default())
     }
 }

@@ -17,6 +17,11 @@ fn process_command(command: Command) -> Response {
         Command::InvalidCommand => Response::InvalidCommand,
         Command::InternalError => Response::InternalError,
         Command::EchoU8(n) => Response::EchoU8Resp(n),
+        /*
+        * ShutdownConnection is exposed to any connected client 
+        * this is not good
+        * TODO gate Command::ShutdownConnection behind something (passkey?)
+        */
         Command::ShutdownConnection => Response::ShutdownConnection
     }
 }
@@ -24,7 +29,8 @@ fn process_command(command: Command) -> Response {
 
 /*
  * General setup for spawning usb connection
- * May panic on startup
+ * NOTE May panic on startup
+ * TODO implement errors channel that a client can read from
  */
 fn spawn_usb_connection(spawner: &Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -37,7 +43,7 @@ fn spawn_usb_connection(spawner: &Spawner) {
     .unwrap();
 
 
-    conn.spawn_io_task(&spawner).unwrap();
+    conn.spawn_io_task(spawner).unwrap();
 }
 
 
@@ -46,6 +52,7 @@ fn spawn_usb_connection(spawner: &Spawner) {
 async fn main(spawner: Spawner) {
     spawn_usb_connection(&spawner);
 
+    /* Main command executor */
     loop {
         let PendingCommand { command, response_signal } = CMD_CHANNEL.receive().await;
         let response = process_command(command);

@@ -24,25 +24,10 @@ pub enum Command {
 
 #[cfg(feature = "client")]
 impl Command {
-    pub fn packet_data(&self) -> PacketData {
+    pub fn to_packet_data(&self) -> PacketData {
         serialize_to_packet_data(self)
     }
 }
-
-#[cfg(feature = "client")]
-impl From<Command> for PacketData {
-    fn from(value: Command) -> Self {
-        value.packet_data()
-    }
-}
-
-#[cfg(feature = "host")]
-impl From<PacketData> for Command {
-    fn from(value: PacketData) -> Self {
-        deserialize_packet_data(value)
-    }
-}
-
 
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone)]
@@ -57,26 +42,10 @@ pub enum Response {
 
 #[cfg(feature = "host")]
 impl Response {
-    pub fn packet_data(&self) -> PacketData {
+    pub fn to_packet_data(&self) -> PacketData {
         serialize_to_packet_data(self)
     }
 }
-
-#[cfg(feature = "host")]
-impl From<Response> for PacketData {
-    fn from(value: Response) -> Self {
-        value.packet_data()
-    }
-}
-
-#[cfg(feature = "client")]
-impl From<PacketData> for Response {
-    fn from(value: PacketData) -> Self {
-        deserialize_packet_data(value)
-    }
-}
-
-
 
 
 /*
@@ -96,13 +65,4 @@ fn serialize_to_packet_data<T: Serialize + Default>(value: &T) -> PacketData {
     };
 
     PacketData::new(buf, len)
-}
-
-
-/*
- * Deserializes PacketData or T::default() is used
- */
-fn deserialize_packet_data<T: DeserializeOwned + Default>(packet_data: PacketData) -> T {
-    postcard::from_bytes(packet_data.as_slice())
-        .unwrap_or(T::default())
 }

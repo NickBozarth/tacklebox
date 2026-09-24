@@ -1,7 +1,7 @@
 use embassy_usb::driver::EndpointError;
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CommunicationError {
     Timeout,
     BufferOverflowError,
@@ -21,7 +21,7 @@ impl From<EndpointError> for CommunicationError {
 pub type CommunicationResult<T> = core::result::Result<T, CommunicationError>;
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ConnectionError {
     FlashFetchError,
     SerialParseError,
