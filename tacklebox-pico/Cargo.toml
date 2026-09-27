@@ -13,6 +13,7 @@ embassy-usb = "0.6.0"
 panic-halt = "1.0.0"
 portable-atomic = { version = "1.15.0", default-features = false, features = ["critical-section"] }
 static_cell = "2.1.1"
+tacklebox-core = { path = "../tacklebox-core", features = ["host"] }
 
 [profile.dev]
 panic = "abort"

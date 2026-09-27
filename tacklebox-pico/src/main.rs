@@ -5,7 +5,7 @@ use embassy_executor::Spawner;
 use embassy_rp as _;
 use panic_halt as _;
 
-
+mod comms;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
