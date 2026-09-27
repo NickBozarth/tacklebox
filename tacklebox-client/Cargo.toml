@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-postcard = { workspace = true }
-serde = { workspace = true }
 tokio = { version = "1.53.1", features = ["full"] }
 tokio-serial = "5.5.0"
+tacklebox-core = { path = "../tacklebox-core", features = ["client"] }

@@ -12,8 +12,6 @@ embassy-time = { version = "0.5.1", features = ["tick-hz-1_000_000"] }
 embassy-usb = "0.6.0"
 panic-halt = "1.0.0"
 portable-atomic = { version = "1.15.0", default-features = false, features = ["critical-section"] }
-postcard = { workspace = true }
-serde = { workspace = true }
 static_cell = "2.1.1"
 
 [profile.dev]

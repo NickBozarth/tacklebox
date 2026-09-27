@@ -1597,8 +1597,7 @@ dependencies = [
 name = "tacklebox-client"
 version = "0.1.0"
 dependencies = [
- "postcard",
- "serde",
+ "tacklebox-core",
  "tokio",
  "tokio-serial",
 ]
@@ -1606,6 +1605,10 @@ dependencies = [
 [[package]]
 name = "tacklebox-core"
 version = "0.1.0"
+dependencies = [
+ "postcard",
+ "serde",
+]
 
 [[package]]
 name = "tacklebox-pico"
@@ -1619,8 +1622,6 @@ dependencies = [
  "embassy-usb",
  "panic-halt",
  "portable-atomic",
- "postcard",
- "serde",
  "static_cell",
 ]
 
