@@ -12,12 +12,14 @@ use crate::comms::packet_data::{MAX_PACKET_SIZE, PacketData};
  * - Host sends Response(s) to Client
  * - Client handles Response
  */
-#[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub enum Command {
     #[default]
     InvalidCommand,
+    InternalError,
 
-    EchoU8(u8)
+    EchoU8(u8),
+    ShutdownDevice,
 }
 
 impl Command {
@@ -29,12 +31,14 @@ impl Command {
 
 
 
-#[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub enum Response {
     #[default]
     InvalidCommand,
+    InternalError,
 
-    EchoU8(u8)
+    EchoU8(u8),
+    ShutdownDevice,
 }
 
 impl Response {

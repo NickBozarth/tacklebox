@@ -1,21 +1,34 @@
 use core::{error::Error, fmt::{Display}};
 
+use embassy_usb::driver::EndpointError;
+
 pub type CommunicationResult<T> = core::result::Result<T, CommunicationError>;
 
 #[derive(Debug, PartialEq)]
 pub enum CommunicationError {
+    BufferOverflow,
     DeviceDisabled
 }
 
 impl Display for CommunicationError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::BufferOverflow => write!(f, "BufferOverflow when writing data"),
             Self::DeviceDisabled => write!(f, "Attempted to send data to a disabled device")
         }
     }
 }
 
 impl Error for CommunicationError {}
+
+impl From<EndpointError> for CommunicationError {
+    fn from(value: EndpointError) -> Self {
+        match value {
+            EndpointError::BufferOverflow => Self::BufferOverflow,
+            EndpointError::Disabled => Self::DeviceDisabled
+        }
+    }
+}
 
 
 
