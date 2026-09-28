@@ -2,11 +2,13 @@ use core::{error::Error, fmt::{Display}};
 
 use embassy_usb::driver::EndpointError;
 
+
 pub type CommunicationResult<T> = core::result::Result<T, CommunicationError>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(u8)]
 pub enum CommunicationError {
-    BufferOverflow,
+    BufferOverflow = 0,
     DeviceDisabled
 }
 
@@ -35,9 +37,10 @@ impl From<EndpointError> for CommunicationError {
 
 pub type ConnectionResult<T> = core::result::Result<T, ConnectionError>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(u8)]
 pub enum ConnectionError {
-    IoTaskSpawnError,
+    IoTaskSpawnError = 0,
     FlashFetchError,
     SerialParseError,
     TaskSpawnError

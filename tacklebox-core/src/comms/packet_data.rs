@@ -1,4 +1,7 @@
-use crate::comms::messages::{Command, Response};
+#[cfg(feature = "host")]
+use crate::comms::messages::Command;
+#[cfg(feature = "client")]
+use crate::comms::messages::Response;
 
 pub const MAX_PACKET_SIZE: usize = 64;
 

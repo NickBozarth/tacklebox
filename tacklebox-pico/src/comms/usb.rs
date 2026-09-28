@@ -161,7 +161,7 @@ impl Connection for UsbConnection {
         io_task
     }
 
-    fn shutdown_connection() -> ConnectionResult<()> {
+    fn shutdown_connection(self) -> ConnectionResult<()> {
         USB_STOP_SIGNAL.signal(());
         Ok(())
     }

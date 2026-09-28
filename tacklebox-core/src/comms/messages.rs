@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use crate::comms::packet_data::{MAX_PACKET_SIZE, PacketData};
 
 
+pub type ErrorId = u8;
+pub const ERROR_BUFFER_SIZE: usize = 8;
+
 /*
  * Command/Response objects form a communication channel
  * between client and host
@@ -19,7 +22,8 @@ pub enum Command {
     InternalError,
 
     EchoU8(u8),
-    ShutdownDevice,
+    ShutdownConnection,
+    PollErrors,
 }
 
 impl Command {
@@ -38,7 +42,8 @@ pub enum Response {
     InternalError,
 
     EchoU8(u8),
-    ShutdownDevice,
+    ShutdownConnection,
+    Errors(heapless::Vec<u8, ERROR_BUFFER_SIZE>)
 }
 
 impl Response {

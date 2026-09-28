@@ -1,7 +1,7 @@
 use embassy_executor::{SpawnError, SpawnToken, Spawner};
 use tacklebox_core::comms::{messages::{Command, Response}, packet_data::PacketData};
 
-use crate::comms::errors::{CommunicationError, CommunicationResult, ConnectionError, ConnectionResult};
+use crate::comms::{command_executor::send_global_command, errors::{CommunicationError, CommunicationResult, ConnectionError, ConnectionResult}};
 
 
 pub trait Connection: Sized {
@@ -9,10 +9,10 @@ pub trait Connection: Sized {
     fn recieve_bytes(&mut self) -> impl Future<Output = CommunicationResult<PacketData>>;
 
     fn get_io_task() -> impl IoTask<Self>;
-    fn shutdown_connection() -> ConnectionResult<()>;
+    fn shutdown_connection(self) -> ConnectionResult<()>;
 
 
-    async fn send_response(&mut self, response: Response) -> CommunicationResult<usize> {
+    async fn send_response(&mut self, response: &Response) -> CommunicationResult<usize> {
         let pd = response.as_packet_data();
         Self::send_bytes(self, pd.as_slice())
             .await
@@ -30,19 +30,19 @@ pub trait Connection: Sized {
                 .await
                 .unwrap_or(Command::InternalError);
 
-            //TODO implement a global command channel
-            // let response = send_global_command(command).await;
-            let response: Response = todo!();
+            let response = send_global_command(command).await;
 
-            let send_res = self.send_response(response).await;
+            let send_res = self.send_response(&response).await;
             if send_res == Err(CommunicationError::DeviceDisabled) {
                 break;
             }
 
-            if response == Response::ShutdownDevice {
+            if response == Response::ShutdownConnection {
                 break;
             }
         }
+
+        let _ = self.shutdown_connection();
     }
 
     fn spawn_io_task(self, spawner: &Spawner) -> ConnectionResult<()> {
@@ -58,7 +58,6 @@ pub trait Connection: Sized {
  * NOTE embassy_executor::task cannot use generics and this is the workaround
  */
 pub trait IoTask<T: Connection> {
-    fn call_task(&self, connection: T) -> Result<SpawnToken<impl Sized>, SpawnError>;
     fn spawn_io_task(self, connection: T, spawner: &Spawner) -> ConnectionResult<()>;
 }
 
@@ -68,13 +67,9 @@ where
     F: Fn(T) -> Result<SpawnToken<S>, SpawnError>,
     S: Sized
 {
-    fn call_task(&self, connection: T) -> Result<SpawnToken<impl Sized>, SpawnError> {
-        (self)(connection)
-    }
-
     fn spawn_io_task(self, connection: T, spawner: &Spawner) -> ConnectionResult<()> {
         spawner.spawn(
-            self.call_task(connection)
+            (self)(connection)
                 .map_err(|_| ConnectionError::IoTaskSpawnError)?
         );
 
