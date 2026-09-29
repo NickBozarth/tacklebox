@@ -7,3 +7,6 @@ edition = "2024"
 tokio = { version = "1.53.1", features = ["full"] }
 tokio-serial = "5.5.0"
 tacklebox-core = { path = "../tacklebox-core", features = ["client"] }
+
+[dev-dependencies]
+serial_test = "4.0.1"

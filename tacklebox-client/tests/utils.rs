@@ -1,11 +1,8 @@
-use std::{sync::LazyLock, time::Duration};
+use std::time::Duration;
 
 use tacklebox_core::comms::{messages::{Command, Response}, packet_data::{MAX_PACKET_SIZE, PacketData}};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, sync::Mutex, time::{error::Elapsed, timeout}};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, time::{error::Elapsed, timeout}};
 use tokio_serial::SerialStream;
-
-
-pub static SERIAL_PORT: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 
 pub fn get_serial_port() -> SerialStream {

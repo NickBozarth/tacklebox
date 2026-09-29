@@ -4,22 +4,23 @@ mod utils;
 mod usb_tests {
     use std::time::Duration;
 
-    use tacklebox_core::comms::{messages::{Command, Response}, packet_data::MAX_PACKET_SIZE};
+    use serial_test::serial;
+use tacklebox_core::comms::{messages::{Command, Response}, packet_data::MAX_PACKET_SIZE};
 use tokio::time::timeout;
 
-    use crate::utils::{SERIAL_PORT, get_serial_port, read_response, read_response_with_timeout, write_buf, write_buf_recv, write_cmd, write_cmd_recv, write_cmd_recv_timeout};
+    use crate::utils::{get_serial_port, read_response, read_response_with_timeout, write_buf, write_buf_recv, write_cmd, write_cmd_recv, write_cmd_recv_timeout};
 
     #[tokio::test]
+    #[serial]
     async fn test_echo() {
-        let _guard = SERIAL_PORT.lock().await;
         let mut port = get_serial_port();
         let res = write_cmd_recv(&mut port, Command::EchoU8(8)).await;
         assert!(res == Response::EchoU8(8))
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_invalid_command() {
-        let _guard = SERIAL_PORT.lock().await;
         let mut port = get_serial_port();
         let res = write_cmd_recv(&mut port, Command::InvalidCommand).await;
         assert!(res == Response::InvalidCommand);
@@ -27,8 +28,8 @@ use tokio::time::timeout;
 
 
     #[tokio::test]
+    #[serial]
     async fn test_invalid_bytes() {
-        let _guard = SERIAL_PORT.lock().await;
         let mut port = get_serial_port();
 
         let invalid_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 10];
@@ -39,8 +40,8 @@ use tokio::time::timeout;
 
 
     #[tokio::test]
+    #[serial]
     async fn test_should_split_large_requests() {
-        let _guard = SERIAL_PORT.lock().await;
         let mut port = get_serial_port();
 
         let large_buf = [10u8; MAX_PACKET_SIZE + 1];
@@ -63,8 +64,8 @@ use tokio::time::timeout;
 
 
     #[tokio::test]
+    #[serial]
     async fn test_too_many_sends() {
-        let _guard = SERIAL_PORT.lock().await;
         let mut port = get_serial_port();
 
         write_cmd(&mut port, Command::EchoU8(1)).await;
@@ -77,8 +78,8 @@ use tokio::time::timeout;
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_sequential_reads_should_fail() {
-        let _guard = SERIAL_PORT.lock().await;
         let mut port = get_serial_port();
 
         write_cmd(&mut port, Command::EchoU8(8)).await;
@@ -90,8 +91,8 @@ use tokio::time::timeout;
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_batched_writes_to_batched_reads() {
-        let _guard = SERIAL_PORT.lock().await;
         let mut port = get_serial_port();
 
         for i in 0..10 {
@@ -110,8 +111,8 @@ use tokio::time::timeout;
 
     // Shutdown test works but it shuts down the device so no other tests run
     // #[tokio::test]
+    // #[serial]
     // async fn test_shutdown() {
-    //     let _guard = SERIAL_PORT.lock().await;
     //     let mut port = get_serial_port();
     //
     //     let resp = write_cmd_recv(&mut port, Command::ShutdownConnection)
