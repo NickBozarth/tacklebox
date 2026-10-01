@@ -23,7 +23,6 @@ pub enum Command {
 
     EchoU8(u8),
     ShutdownConnection,
-    PollErrors,
 }
 
 impl Command {
@@ -43,7 +42,6 @@ pub enum Response {
 
     EchoU8(u8),
     ShutdownConnection,
-    Errors(heapless::Vec<u8, ERROR_BUFFER_SIZE>)
 }
 
 impl Response {
