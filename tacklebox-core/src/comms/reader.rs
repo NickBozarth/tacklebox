@@ -1,5 +1,8 @@
 use postcard::accumulator::{CobsAccumulator, FeedResult};
-use crate::comms::{consts::{MAX_FRAME_SIZE, MAX_PACKET_SIZE}, errors::{MessageReaderError, MessageReaderResult, MessageResult}, messages::Message};
+
+use crate::comms::consts::{MAX_FRAME_SIZE, MAX_PACKET_SIZE};
+use crate::comms::errors::{MessageReaderError, MessageReaderResult};
+use crate::comms::messages::Message;
 
 pub struct FrameReader {
     acc: CobsAccumulator<MAX_FRAME_SIZE>,
