@@ -1,4 +1,7 @@
-use crate::comms::{consts::{MAX_FRAME_SIZE, MAX_PACKET_SIZE}, errors::{MessageWriterError, MessageWriterResult}, messages::Message};
+use crate::comms::consts::{MAX_FRAME_SIZE, MAX_PACKET_SIZE};
+use crate::comms::errors::{MessageWriterError, MessageWriterResult};
+use crate::comms::messages::Message;
+
 
 pub trait MessageWriter<M: Message> {
     fn write_packet(&mut self, packet_data: &[u8]) -> impl Future<Output = MessageWriterResult<()>> + Send;

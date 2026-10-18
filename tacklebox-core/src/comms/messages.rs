@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::comms::{consts::MAX_FRAME_SIZE, errors::{MessageError, MessageResult}, packet_data::{MAX_PACKET_SIZE, PacketData}};
+use crate::comms::consts::MAX_FRAME_SIZE;
+use crate::comms::errors::{MessageError, MessageResult};
 
 
 
