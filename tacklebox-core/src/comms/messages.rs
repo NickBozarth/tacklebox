@@ -1,10 +1,17 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::comms::packet_data::{MAX_PACKET_SIZE, PacketData};
+use crate::comms::{consts::MAX_FRAME_SIZE, errors::{MessageError, MessageResult}, packet_data::{MAX_PACKET_SIZE, PacketData}};
 
 
-pub type ErrorId = u8;
-pub const ERROR_BUFFER_SIZE: usize = 8;
+
+pub trait Message: Serialize + DeserializeOwned + Default {
+    fn to_frame(&self, frame_buf: &mut [u8; MAX_FRAME_SIZE]) -> MessageResult<usize> {
+        postcard::to_slice_cobs(self, frame_buf.as_mut_slice())
+            .map(|frame| frame.len())
+            .map_err(MessageError::SerializeError)
+    }
+}
+
 
 /*
  * Command/Response objects form a communication channel
@@ -25,12 +32,7 @@ pub enum Command {
     ShutdownConnection,
 }
 
-impl Command {
-    #[cfg(feature = "client")]
-    pub fn as_packet_data(&self) -> PacketData {
-        serialize_to_packet_data(self)
-    }
-}
+impl Message for Command {}
 
 
 
@@ -44,30 +46,4 @@ pub enum Response {
     ShutdownConnection,
 }
 
-impl Response {
-    #[cfg(feature = "host")]
-    pub fn as_packet_data(&self) -> PacketData {
-        serialize_to_packet_data(self)
-    }
-}
-
-
-
-/*
- * Attempts to serialize value to [u8; MAX_PACKET_SIZE]
- * If value fails to serialize, attempts to serialize T::default()
- * If default fails to serialize, PacketData of len 0 is returned
- */
-fn serialize_to_packet_data<T: Serialize + Default>(value: &T) -> PacketData {
-    let mut buf = [0u8; MAX_PACKET_SIZE];
-    let len = match postcard::to_slice(&value, &mut buf) {
-        Ok(bytes) => bytes.len(),
-        Err(_) => {
-            postcard::to_slice(&T::default(), &mut buf)
-                .map(|bytes| bytes.len())
-                .unwrap_or(0)
-        }
-    };
-
-    PacketData::new(buf, len)
-}
+impl Message for Response {}
