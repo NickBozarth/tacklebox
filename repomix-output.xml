@@ -1,0 +1,1344 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.cargo/
+  config.toml
+tacklebox-client/
+  src/
+    main.rs
+  tests/
+    test_usb.rs
+    utils.rs
+  Cargo.toml
+tacklebox-core/
+  src/
+    comms/
+      consts.rs
+      errors.rs
+      messages.rs
+      mod.rs
+      reader.rs
+      writer.rs
+    lib.rs
+  tests/
+    message_tests.rs
+  Cargo.toml
+tacklebox-pico/
+  src/
+    comms/
+      command_executor.rs
+      connection.rs
+      errors.rs
+      mod.rs
+      usb.rs
+    main.rs
+  build.rs
+  Cargo.toml
+  memory.x
+.gitignore
+Cargo.toml
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="tacklebox-client/tests/test_usb.rs">
+mod utils;
+
+
+mod usb_tests {
+    use std::time::Duration;
+
+    use tacklebox_core::comms::{messages::{Command, Response}, packet_data::MAX_PACKET_SIZE};
+use tokio::time::timeout;
+
+    use crate::utils::{SERIAL_PORT, get_serial_port, read_response, read_response_with_timeout, write_buf, write_buf_recv, write_cmd, write_cmd_recv, write_cmd_recv_timeout};
+
+    #[tokio::test]
+    async fn test_echo() {
+        let _guard = SERIAL_PORT.lock().await;
+        let mut port = get_serial_port();
+        let res = write_cmd_recv(&mut port, Command::EchoU8(8)).await;
+        assert!(res == Response::EchoU8(8))
+    }
+
+    #[tokio::test]
+    async fn test_invalid_command() {
+        let _guard = SERIAL_PORT.lock().await;
+        let mut port = get_serial_port();
+        let res = write_cmd_recv(&mut port, Command::InvalidCommand).await;
+        assert!(res == Response::InvalidCommand);
+    }
+
+
+    #[tokio::test]
+    async fn test_invalid_bytes() {
+        let _guard = SERIAL_PORT.lock().await;
+        let mut port = get_serial_port();
+
+        let invalid_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 10];
+        let resp = write_buf_recv(&mut port, &invalid_bytes).await;
+
+        assert!(resp == Response::InternalError);
+    }
+
+
+    #[tokio::test]
+    async fn test_should_split_large_requests() {
+        let _guard = SERIAL_PORT.lock().await;
+        let mut port = get_serial_port();
+
+        let large_buf = [10u8; MAX_PACKET_SIZE + 1];
+        write_buf(&mut port, &large_buf).await;
+
+        let resp = read_response(&mut port).await;
+        assert!(resp == Response::InvalidCommand);
+
+        let resp = read_response(&mut port).await;
+        assert!(resp == Response::InvalidCommand);
+
+
+        timeout(
+            Duration::from_millis(200),
+            read_response(&mut port)
+        )
+            .await
+            .expect_err("Connection sent too much data");
+    }
+
+
+    #[tokio::test]
+    async fn test_too_many_sends() {
+        let _guard = SERIAL_PORT.lock().await;
+        let mut port = get_serial_port();
+
+        write_cmd(&mut port, Command::EchoU8(1)).await;
+        write_cmd(&mut port, Command::EchoU8(2)).await;
+        write_cmd(&mut port, Command::EchoU8(3)).await;
+        write_cmd(&mut port, Command::EchoU8(4)).await;
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+    }
+
+    #[tokio::test]
+    async fn test_sequential_reads_should_fail() {
+        let _guard = SERIAL_PORT.lock().await;
+        let mut port = get_serial_port();
+
+        write_cmd(&mut port, Command::EchoU8(8)).await;
+        let resp = read_response(&mut port).await;
+        assert!(resp == Response::EchoU8(8));
+        read_response_with_timeout(&mut port, Duration::from_millis(500))
+            .await
+            .expect_err("Device sent too much data");
+    }
+
+    #[tokio::test]
+    async fn test_batched_writes_to_batched_reads() {
+        let _guard = SERIAL_PORT.lock().await;
+        let mut port = get_serial_port();
+
+        for i in 0..10 {
+            write_cmd(&mut port, Command::EchoU8(i)).await;
+        }
+
+        for i in 0..10 {
+            let resp = read_response_with_timeout(&mut port, Duration::from_millis(200))
+                .await
+                .expect("Read timeout");
+
+            assert!(resp == Response::EchoU8(i));
+        }
+    }
+
+
+    // Shutdown test works but it shuts down the device so no other tests run
+    // #[tokio::test]
+    // async fn test_shutdown() {
+    //     let _guard = SERIAL_PORT.lock().await;
+    //     let mut port = get_serial_port();
+    //
+    //     let resp = write_cmd_recv(&mut port, Command::ShutdownConnection)
+    //         .await;
+    //     assert!(resp == Response::ShutdownConnection);
+    //
+    //     write_cmd_recv_timeout(&mut port, Command::EchoU8(100), Duration::from_millis(200))
+    //         .await
+    //         .expect_err("Device did not shutdown");
+    // }
+}
+</file>
+
+<file path="tacklebox-client/tests/utils.rs">
+use std::{sync::LazyLock, time::Duration};
+
+use tacklebox_core::comms::{messages::{Command, Response}, packet_data::{MAX_PACKET_SIZE, PacketData}};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, sync::Mutex, time::{error::Elapsed, timeout}};
+use tokio_serial::SerialStream;
+
+
+pub static SERIAL_PORT: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+
+pub fn get_serial_port() -> SerialStream {
+    const DEV_PATH: &'static str = "/dev/ttyACM0";
+    const BAUD_RATE: u32 = 115_200;
+
+
+    SerialStream::open(
+        &tokio_serial::new(DEV_PATH, BAUD_RATE)
+            .timeout(Duration::from_millis(200))
+    )
+    .expect("Failed to open SerialStream port")
+}
+
+pub async fn write_cmd_recv(port: &mut SerialStream, command: Command) -> Response {
+    write_cmd(port, command).await;
+    read_response(port).await
+}
+
+pub async fn write_cmd_recv_timeout(
+    port: &mut SerialStream,
+    command: Command,
+    duration: Duration
+) -> Result<Response, Elapsed> {
+    timeout(duration, write_cmd_recv(port, command)).await
+}
+
+
+pub async fn write_buf_recv(port: &mut SerialStream, buf: &[u8]) -> Response {
+    write_buf(port, buf).await;
+    read_response(port).await
+}
+
+pub async fn write_cmd(port: &mut SerialStream, command: Command) {
+    write_buf(port, command.as_packet_data().as_slice()).await;
+}
+
+pub async fn write_buf(port: &mut SerialStream, buf: &[u8]) {
+    timeout(
+        Duration::from_millis(200),
+        port.write(buf)
+    )
+        .await
+        .expect("Write timeout")
+        .expect("Failed write");
+}
+
+pub async fn read_response(port: &mut SerialStream) -> Response {
+    let mut buf = [0u8; MAX_PACKET_SIZE];
+    let len = port.read(&mut buf)
+        .await
+        .expect("Failed read");
+
+    PacketData::new(buf, len).into_response()
+}
+
+pub async fn read_response_with_timeout(
+    port: &mut SerialStream,
+    duration: Duration
+) -> Result<Response, Elapsed> {
+    timeout(duration, read_response(port)).await
+}
+</file>
+
+<file path="tacklebox-pico/src/comms/command_executor.rs">
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel, signal::Signal};
+use tacklebox_core::comms::messages::{Command, Response};
+
+static COMMAND_CHANNEL: Channel<CriticalSectionRawMutex, PendingCommand, 8> = Channel::new();
+
+struct PendingCommand {
+    pub command: Command,
+    pub response_signal: *const Signal<CriticalSectionRawMutex, Response>
+}
+
+unsafe impl Send for PendingCommand {}
+
+pub async fn send_global_command(command: Command) -> Response {
+    let response_signal: Signal<CriticalSectionRawMutex, Response> = Signal::new();
+    let pc = PendingCommand {
+        command,
+        response_signal: &response_signal as *const _
+    };
+
+    COMMAND_CHANNEL.send(pc).await;
+    response_signal.wait().await
+}
+
+
+pub struct CommandExecutor;
+
+impl CommandExecutor {
+    pub async fn run() {
+        loop {
+            let pc = COMMAND_CHANNEL.receive().await;
+            /*
+             * SAFETY pc.response_signal may only be signalled once
+             * the owner of response_signal will only drop after it is signalled
+             */
+            let rs = unsafe { &*pc.response_signal };
+
+            let response = Self::execute_command(pc.command).await;
+            rs.signal(response);
+        }
+    }
+
+    pub async fn execute_command(command: Command) -> Response {
+        match command {
+            Command::InvalidCommand => Response::InvalidCommand,
+            Command::InternalError => Response::InternalError,
+            Command::ShutdownConnection => Response::ShutdownConnection,
+            Command::EchoU8(n) => Response::EchoU8(n),
+        }
+    }
+}
+</file>
+
+<file path="tacklebox-pico/build.rs">
+use std::env;
+use std::fs::File;
+use std::io::Write;
+use std::path::PathBuf;
+
+fn main() {
+    // Put `memory.x` into the build output directory
+    let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    File::create(out.join("memory.x"))
+        .unwrap()
+        .write_all(include_bytes!("memory.x"))
+        .unwrap();
+
+    // Tell cargo to pass `OUT_DIR` as a search path to the linker
+    println!("cargo:rustc-link-search={}", out.display());
+
+    // Re-run if `memory.x` changes
+    println!("cargo:rerun-if-changed=memory.x");
+}
+</file>
+
+<file path="tacklebox-pico/memory.x">
+/*
+* SPDX-License-Identifier: MIT OR Apache-2.0
+*
+* Copyright (c) 2021–2024 The rp-rs Developers
+* Copyright (c) 2021 rp-rs organization
+* Copyright (c) 2025 Raspberry Pi Ltd.
+*/
+
+MEMORY {
+    BOOT2 : ORIGIN = 0x10000000, LENGTH = 0x100
+    /*
+     * Here we assume you have 2048 KiB of Flash. This is what the Pi Pico
+     * has, but your board may have more or less Flash and you should adjust
+     * this value to suit.
+     */
+    FLASH : ORIGIN = 0x10000100, LENGTH = 2048K - 0x100
+    /*
+     * RAM consists of 4 banks, SRAM0-SRAM3, with a striped mapping.
+     * This is usually good for performance, as it distributes load on
+     * those banks evenly.
+     */
+    RAM : ORIGIN = 0x20000000, LENGTH = 256K
+    /*
+     * RAM banks 4 and 5 use a direct mapping. They can be used to have
+     * memory areas dedicated for some specific job, improving predictability
+     * of access times.
+     * Example: Separate stacks for core0 and core1.
+     */
+    SRAM4 : ORIGIN = 0x20040000, LENGTH = 4k
+    SRAM5 : ORIGIN = 0x20041000, LENGTH = 4k
+
+    /* SRAM banks 0-3 can also be accessed directly. However, those ranges
+       alias with the RAM mapping, above. So don't use them at the same time!
+    SRAM0 : ORIGIN = 0x21000000, LENGTH = 64k
+    SRAM1 : ORIGIN = 0x21010000, LENGTH = 64k
+    SRAM2 : ORIGIN = 0x21020000, LENGTH = 64k
+    SRAM3 : ORIGIN = 0x21030000, LENGTH = 64k
+    */
+}
+
+EXTERN(BOOT2_FIRMWARE)
+
+SECTIONS {
+    /* ### Boot loader
+     *
+     * An executable block of code which sets up the QSPI interface for
+     * 'Execute-In-Place' (or XIP) mode. Also sends chip-specific commands to
+     * the external flash chip.
+     *
+     * Must go at the start of external flash, where the Boot ROM expects it.
+     */
+    .boot2 ORIGIN(BOOT2) :
+    {
+        KEEP(*(.boot2));
+    } > BOOT2
+} INSERT BEFORE .text;
+
+SECTIONS {
+    /* ### Boot ROM info
+     *
+     * Goes after .vector_table, to keep it in the first 512 bytes of flash,
+     * where picotool can find it
+     */
+    .boot_info : ALIGN(4)
+    {
+        KEEP(*(.boot_info));
+    } > FLASH
+
+} INSERT AFTER .vector_table;
+
+/* move .text to start /after/ the boot info */
+_stext = ADDR(.boot_info) + SIZEOF(.boot_info);
+
+SECTIONS {
+    /* ### Picotool 'Binary Info' Entries
+     *
+     * Picotool looks through this block (as we have pointers to it in our
+     * header) to find interesting information.
+     */
+    .bi_entries : ALIGN(4)
+    {
+        /* We put this in the header */
+        __bi_entries_start = .;
+        /* Here are the entries */
+        KEEP(*(.bi_entries));
+        /* Keep this block a nice round size */
+        . = ALIGN(4);
+        /* We put this in the header */
+        __bi_entries_end = .;
+    } > FLASH
+} INSERT AFTER .text;
+</file>
+
+<file path=".gitignore">
+**/target
+</file>
+
+<file path=".cargo/config.toml">
+[target.thumbv6m-none-eabi]
+runner = "sudo picotool load -x -t elf"
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+]
+
+
+[alias]
+pico = "build --package tacklebox-pico --target thumbv6m-none-eabi"
+pico-run = "run --package tacklebox-pico --target thumbv6m-none-eabi"
+
+client = "build --package tacklebox-client"
+client-run = "run --package tacklebox-client"
+client-test = "test --package tacklebox-client"
+
+core-test = "test --package tacklebox-core"
+</file>
+
+<file path="tacklebox-client/src/main.rs">
+fn main() {
+    println!("Hello, world!");
+}
+</file>
+
+<file path="tacklebox-core/src/comms/consts.rs">
+// The maximum amount that can be sent over a single read/write
+pub const MAX_PACKET_SIZE: usize = 64;
+// The maximum size of an entire accumulated message
+pub const MAX_MESSAGE_SIZE: usize = 256;
+// The size of the COBS frame needed to hold the biggest message
+// max COBS frame size = payload + 1 byte per 254 + 1 byte (trailing 0x00)
+pub const MAX_FRAME_SIZE: usize = MAX_MESSAGE_SIZE + MAX_MESSAGE_SIZE.div_ceil(254) + 1;
+</file>
+
+<file path="tacklebox-pico/src/comms/mod.rs">
+pub mod command_executor;
+pub mod connection;
+pub mod errors;
+pub mod usb;
+</file>
+
+<file path="tacklebox-core/src/comms/errors.rs">
+#[derive(Debug, PartialEq, Clone)]
+pub enum MessageError {
+    SerializeError(postcard::Error)
+}
+pub type MessageResult<T> = Result<T, MessageError>;
+
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum MessageReaderError {
+    BufferOverflow,
+    DeserError,
+    Disconnected,
+    Empty,
+    ReadError,
+}
+pub type MessageReaderResult<T> = Result<T, MessageReaderError>;
+
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum MessageWriterError {
+    Disconnected,
+    SerializeError(MessageError),
+    WriteError,
+}
+pub type MessageWriterResult<T> = Result<T, MessageWriterError>;
+</file>
+
+<file path="tacklebox-core/src/comms/reader.rs">
+use postcard::accumulator::{CobsAccumulator, FeedResult};
+
+use crate::comms::consts::{MAX_FRAME_SIZE, MAX_PACKET_SIZE};
+use crate::comms::errors::{MessageReaderError, MessageReaderResult};
+use crate::comms::messages::Message;
+
+pub struct FrameReader {
+    acc: CobsAccumulator<MAX_FRAME_SIZE>,
+    pending: [u8; MAX_PACKET_SIZE],
+    start: usize,
+    end: usize
+}
+
+impl FrameReader {
+    pub fn new() -> Self {
+        Self {
+            acc: CobsAccumulator::new(),
+            pending: [0u8; MAX_PACKET_SIZE],
+            start: 0,
+            end: 0
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+
+    // Set pending data in reader
+    pub fn set_pending(&mut self, data: &[u8]) {
+        let n = usize::min(data.len(), MAX_PACKET_SIZE);
+        self.pending[..n].copy_from_slice(&data[..n]);
+
+        self.start = 0;
+        self.end = n;
+    }
+
+    // Feeds the accumulator with self.pending and handles the output
+    // Returns:
+    // - None - if data is properly consumed by accumulator
+    // - Some(Err) - if error occurrs when feeding accumulator
+    // - Some(Ok(M)) - if accumulator successfully creates output
+    pub fn poll<M: Message>(&mut self) -> Option<MessageReaderResult<M>> {
+        let input = &self.pending[self.start..self.end];
+
+        let (res, bytes_left) = match self.acc.feed::<M>(input) {
+            FeedResult::Consumed => (None, 0),
+            FeedResult::Success { data, remaining } => (Some(Ok(data)), remaining.len()),
+            FeedResult::OverFull(rest) => (Some(Err(MessageReaderError::BufferOverflow)), rest.len()),
+            FeedResult::DeserError(rest) => (Some(Err(MessageReaderError::DeserError)), rest.len())
+        };
+
+        self.start = self.end - bytes_left;
+        res
+    }
+}
+
+impl Default for FrameReader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
+pub trait MessageReader<M: Message> {
+    fn frame_reader(&mut self) -> &mut FrameReader;
+
+    fn read_packet(&mut self, packet_buf: &mut [u8; MAX_PACKET_SIZE]) -> impl Future<Output = MessageReaderResult<usize>>;
+
+    fn read_message<'a>(&'a mut self) -> impl Future<Output = MessageReaderResult<M>>
+    where
+        Self: Send
+    {
+        async move {
+            loop {
+                if self.frame_reader().is_empty() {
+                    let mut packet_buf = [0u8; MAX_PACKET_SIZE];
+                    let packet_len = self.read_packet(&mut packet_buf).await?;
+                    self.frame_reader().set_pending(&packet_buf[..packet_len]);
+                }
+
+                if let Some(res) = self.frame_reader().poll::<M>() {
+                    return res;
+                }
+            }
+        }
+    }
+}
+</file>
+
+<file path="tacklebox-core/src/comms/writer.rs">
+use crate::comms::consts::{MAX_FRAME_SIZE, MAX_PACKET_SIZE};
+use crate::comms::errors::{MessageWriterError, MessageWriterResult};
+use crate::comms::messages::Message;
+
+
+pub trait MessageWriter<M: Message> {
+    fn write_packet(&mut self, packet_data: &[u8]) -> impl Future<Output = MessageWriterResult<()>>;
+
+    // Convert message to frame
+    // Convert frame to packets
+    // Send packets
+    // Send 0 len packet if len of final packet is MAX_PACKET_SIZE
+    fn write_message(&mut self, message: &M) -> impl  Future<Output = MessageWriterResult<()>> {
+        async move {
+            let mut frame_buf = [0u8; MAX_FRAME_SIZE];
+            let frame_len = message
+                .place_in_frame(&mut frame_buf)
+                .map_err(MessageWriterError::SerializeError)?;
+
+            for packet_data in frame_buf[..frame_len].chunks(MAX_PACKET_SIZE) {
+                self.write_packet(packet_data).await?;
+            }
+
+            if frame_len % MAX_PACKET_SIZE == 0 {
+                self.write_packet(&[]).await?;
+            }
+
+            Ok(())
+        }
+    }
+}
+</file>
+
+<file path="tacklebox-core/tests/message_tests.rs">
+/* TEST WITH cargo test --all-features */
+#[cfg(all(test, feature = "client", feature = "host"))]
+mod message_tests {
+    use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
+
+    use serde::{Deserialize, Serialize};
+    use tacklebox_core::comms::consts::{MAX_FRAME_SIZE, MAX_PACKET_SIZE};
+    use tacklebox_core::comms::errors::{MessageReaderError, MessageReaderResult, MessageWriterError, MessageWriterResult};
+    use tacklebox_core::comms::messages::{Command, Message};
+    use tacklebox_core::comms::reader::{FrameReader, MessageReader};
+    use tacklebox_core::comms::writer::MessageWriter;
+    use tokio::sync::Mutex;
+
+
+
+
+    #[derive(Default)]
+    struct MockWriter<M> {
+        outgoing: Option<Arc<Mutex<VecDeque<Vec<u8>>>>>,
+        _out_type_marker: PhantomData<M>
+    }
+
+    impl<M: Message> MessageWriter<M> for MockWriter<M> {
+        async fn write_packet(&mut self, packet_data: &[u8]) -> MessageWriterResult<()> {
+            self.outgoing
+                .as_ref()
+                .ok_or(MessageWriterError::Disconnected)?
+                .lock()
+                .await
+                .push_back(packet_data.to_vec());
+
+            Ok(())
+        }
+    }
+
+
+
+    #[derive(Default)]
+    struct MockReader<M> {
+        incoming: Option<Arc<Mutex<VecDeque<Vec<u8>>>>>,
+        frame_reader: FrameReader,
+        _in_type_marker: PhantomData<M>
+    }
+
+    impl<M: Message> MessageReader<M> for MockReader<M> {
+        fn frame_reader(&mut self) -> &mut FrameReader {
+            &mut self.frame_reader
+        }
+
+        async fn read_packet(&mut self, packet_buf: &mut [u8; MAX_PACKET_SIZE]) -> MessageReaderResult<usize> {
+            let packet = self.incoming
+                .as_ref()
+                .ok_or(MessageReaderError::Disconnected)?
+                .lock()
+                .await
+                .pop_front()
+                .ok_or(MessageReaderError::Empty)?;
+
+            assert!(packet.len() <= MAX_PACKET_SIZE, "Recieved packet too large");
+            packet_buf[..packet.len()].copy_from_slice(&packet);
+            Ok(packet.len())
+        }
+    }
+
+
+    // Connect transmitter and reciever with a connected buffer
+    fn connect_tx_rx<M: Message>(tx: &mut MockWriter<M>, rx: &mut MockReader<M>) {
+        let message_buffer = Arc::new(Mutex::new(VecDeque::new()));
+        rx.incoming = Some(message_buffer.clone());
+        tx.outgoing = Some(message_buffer.clone());
+    }
+
+    // Create a connected transmitter and reciever
+    fn new_tx_rx<M: Message>() -> (MockWriter<M>, MockReader<M>) {
+        let mut tx = MockWriter::default();
+        let mut rx = MockReader::default();
+        connect_tx_rx(&mut tx, &mut rx);
+        (tx, rx)
+    }
+
+
+    // Create a custom message that can hold a large message
+    #[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+    enum MockMessage {
+        #[default]
+        Invalid,
+        LargeMessage([u128; 16])
+    }
+
+    impl Message for MockMessage {}
+
+
+
+
+    #[tokio::test]
+    async fn transfer_small_small_packet() {
+        let (mut tx, mut rx) = new_tx_rx();
+        tx.write_message(&Command::EchoU8(8)).await.expect("Failed to write");
+        let recv = rx.read_message().await.expect("Failed to read");
+        assert!(recv == Command::EchoU8(8));
+    }
+
+    #[tokio::test]
+    async fn transfer_zero_size_packet() {
+        let (mut tx, mut rx) = new_tx_rx::<Command>();
+        tx.write_packet(&[]).await.expect("Failed to write");
+        let recv = rx.read_message().await.expect_err("Expected to be empty");
+        assert!(recv == MessageReaderError::Empty);
+    }
+
+    #[tokio::test]
+    async fn large_message() {
+        let (mut tx, mut rx) = new_tx_rx();
+
+        let mut message = [0u128; 16];
+        let mut message_bytes = 1;
+        for i in 0..16 {
+            message[i] = message_bytes;
+            message_bytes <<= 8;
+        }
+
+        tx.write_message(&MockMessage::LargeMessage(message)).await.expect("Failed write");
+        let recv = rx.read_message().await.expect("Failed read");
+
+        assert!(recv == MockMessage::LargeMessage(message));
+    }
+
+    #[tokio::test]
+    async fn one_byte_at_a_time() {
+        let (mut tx, mut rx) = new_tx_rx::<Command>();
+
+        let mut frame_buf = [0u8; MAX_FRAME_SIZE];
+        Command::EchoU8(10).place_in_frame(&mut frame_buf).expect("Failed to serialize");
+
+        for byte in frame_buf {
+            tx.write_packet(&[byte]).await.expect("Failed write");
+        }
+
+        let recv = rx.read_message().await.expect("Failed read");
+        assert!(recv == Command::EchoU8(10));
+    }
+
+    #[tokio::test]
+    async fn consecutive_sends_without_delimiter() {
+        const NUM_MESSAGES: u8 = 50;
+
+        // Populate a message_buf with multiple commands
+        let (message_buf, message_len) = {
+            let mut message_buf = [0u8; MAX_FRAME_SIZE];
+
+            let mut message_len = 0;
+            for i in 0..NUM_MESSAGES {
+                let mut curr_message_buf = [0u8; MAX_FRAME_SIZE];
+                let cur_message_len = Command::EchoU8(i)
+                    .place_in_frame(&mut curr_message_buf)
+                    .expect("Failed to serialize");
+
+                assert!(message_len + cur_message_len <= MAX_FRAME_SIZE - 1, "Full message exceeds one frame minus delimiter");
+                message_buf[message_len..message_len+cur_message_len]
+                    .copy_from_slice(&curr_message_buf[..cur_message_len]);
+
+                message_len += cur_message_len;
+            }
+
+            (message_buf, message_len)
+        };
+
+
+        let (mut tx, mut rx) = new_tx_rx::<Command>();
+
+        // Turn message into packet sized chunks and send 
+        for packet in message_buf[..message_len].chunks(MAX_PACKET_SIZE) {
+            tx.write_packet(packet).await.expect("Failed write");
+        }
+        // Send delimiter at the very end if needed
+        if message_len % MAX_PACKET_SIZE == 0 {
+            tx.write_packet(&[]).await.expect("Failed write");
+        }
+
+        // Recieve all of the sent messages
+        for i in 0..NUM_MESSAGES {
+            let recv = rx.read_message().await.expect("Failed read");
+            assert!(recv == Command::EchoU8(i));
+        }
+    }
+}
+</file>
+
+<file path="tacklebox-pico/src/comms/connection.rs">
+use embassy_executor::{SpawnError, SpawnToken, Spawner};
+use tacklebox_core::comms::{errors::MessageWriterError, messages::{Command, Response}, reader::MessageReader, writer::MessageWriter};
+
+use crate::comms::{command_executor::send_global_command, errors::{ConnectionError, ConnectionResult}};
+
+
+pub trait EmbeddedConnection: MessageReader<Command> + MessageWriter<Response> + Sized + Send {
+    fn get_io_task() -> impl IoTask<Self>;
+    fn shutdown_connection(self) -> ConnectionResult<()>;
+
+    async fn handle_io(mut self) {
+        loop {
+            let command = self.read_message()
+                .await
+                .unwrap_or(Command::default());
+
+            let response = send_global_command(command).await;
+
+            match self.write_message(&response).await {
+                Err(MessageWriterError::Disconnected) => continue,
+                _ => {}
+            }
+
+            if response == Response::ShutdownConnection {
+                break;
+            }
+        }
+
+        let _ = self.shutdown_connection();
+    }
+
+    fn spawn_io_task(self, spawner: &Spawner) -> ConnectionResult<()> {
+        let io_task = Self::get_io_task();
+        io_task.spawn_io_task(self, spawner)
+    }
+}
+
+
+
+/* 
+ * Task that handles all io and potential destruction of connection
+ * NOTE embassy_executor::task cannot use generics and this is the workaround
+ */
+pub trait IoTask<T: EmbeddedConnection> {
+    fn spawn_io_task(self, connection: T, spawner: &Spawner) -> ConnectionResult<()>;
+}
+
+impl <T, F, S> IoTask<T> for F
+where
+    T: EmbeddedConnection,
+    F: Fn(T) -> Result<SpawnToken<S>, SpawnError>,
+    S: Sized
+{
+    fn spawn_io_task(self, connection: T, spawner: &Spawner) -> ConnectionResult<()> {
+        spawner.spawn(
+            (self)(connection)
+                .map_err(|_| ConnectionError::IoTaskSpawnError)?
+        );
+
+        Ok(())
+    }
+}
+</file>
+
+<file path="tacklebox-pico/src/comms/usb.rs">
+use core::fmt::Write;
+use embassy_executor::Spawner;
+use embassy_futures::select::{self, select};
+use embassy_rp::{Peri, bind_interrupts, flash::Flash, peripherals::{FLASH, USB}, usb::InterruptHandler};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, once_lock::OnceLock, signal::Signal};
+use embassy_usb::{Builder, Config, UsbDevice, class::cdc_acm::{CdcAcmClass, State}};
+use heapless::String;
+use static_cell::StaticCell;
+use tacklebox_core::comms::{consts::MAX_PACKET_SIZE, errors::{MessageReaderError, MessageReaderResult, MessageWriterError, MessageWriterResult}, messages::{Command, Response}, reader::{FrameReader, MessageReader}, writer::MessageWriter};
+
+use crate::comms::{connection::{EmbeddedConnection, IoTask}, errors::{CommunicationError, CommunicationResult, ConnectionError, ConnectionResult}};
+
+
+type UsbDriver = embassy_rp::usb::Driver<'static, embassy_rp::peripherals::USB>;
+struct FlashId(&'static str);
+
+static USB_STOP_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+
+bind_interrupts!(struct UsbIrqs {
+    USBCTRL_IRQ => InterruptHandler<USB>;
+});
+
+
+pub struct UsbConnection {
+    class: CdcAcmClass<'static, UsbDriver>,
+    frame_reader: FrameReader
+}
+
+impl UsbConnection {
+    /*
+     * Build everything needed for a CdcAcmClass and UsbDevice
+     * AND
+     * start the UsbDevice so we can listen on the connection
+     */
+    pub fn new(
+        usb_perif: Peri<'static, USB>,
+        flash_perif: Peri<'_, FLASH>,
+        spawner: &Spawner
+    ) -> ConnectionResult<Self> {
+        let driver = UsbDriver::new(usb_perif, UsbIrqs);
+        let flash_id = Self::get_flash_id(flash_perif)?;
+        let config = Self::new_config(flash_id);
+        let mut builder = Self::new_builder(driver, config);
+
+        static STATE: StaticCell<State> = StaticCell::new();
+        let class = CdcAcmClass::new(
+            &mut builder,
+            STATE.init(State::new()),
+            MAX_PACKET_SIZE as u16
+        );
+
+        let usb_device = builder.build();
+        Self::spawn_usb_task(usb_device, spawner)?;
+
+        Ok(Self {
+            class,
+            frame_reader: FrameReader::new()
+        })
+    }
+
+
+    fn get_flash_id(flash_perif: Peri<'_, FLASH>) -> ConnectionResult<FlashId> {
+        static SERIAL_STR: OnceLock<&'static str> = OnceLock::new();
+
+        if let Some(&serial_str) = SERIAL_STR.try_get() {
+            return Ok(FlashId(serial_str));
+        }
+
+        // same as defined in memory.x
+        const FLASH_SIZE: usize = 2 * 1024 * 1024 - 0x100;
+        let mut flash = Flash::<_, _, FLASH_SIZE>::new_blocking(flash_perif);
+        let mut flash_id = [0u8; 8];
+        flash.blocking_unique_id(&mut flash_id)
+            .map_err(|_| ConnectionError::FlashFetchError)?;
+
+        static SERIAL_BUF: StaticCell<String<16>> = StaticCell::new();
+        let serial_str_buf = SERIAL_BUF.init(String::new());
+        for byte in flash_id {
+            write!(serial_str_buf, "{:02X}", byte)
+                .map_err(|_| ConnectionError::SerialParseError)?;
+        }
+
+        Ok(FlashId(serial_str_buf))
+    }
+
+    fn new_config(flash_id: FlashId) -> Config
+        <'static> {
+        const RPI_SERIAL_VID: u16 = 0x2E8A_u16;
+        const RPI_PICO_SERIAL_PID: u16 = 0x000A_u16;
+        let mut config = Config::new(RPI_SERIAL_VID, RPI_PICO_SERIAL_PID);
+        config.manufacturer = Some("Raspberry Pi");
+        config.product = Some("Pico USB Serial");
+        /* flash_id is used here in place of a serial number as a unique identifier */
+        config.serial_number = Some(flash_id.0);
+        config.max_power = 100;
+        config.max_packet_size_0 = 64;
+
+        config
+    }
+
+    fn new_builder(driver: UsbDriver, config: Config<'static>) -> Builder<'static, UsbDriver> {
+        static CONFIG_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
+        static BOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
+        static MSOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
+        static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
+
+        Builder::new(
+            driver,
+            config,
+            CONFIG_DESCRIPTOR.init([0u8; 256]),
+            BOS_DESCRIPTOR.init([0u8; 256]),
+            MSOS_DESCRIPTOR.init([0u8; 256]),
+            CONTROL_BUF.init([0u8; 64])
+        )
+    }
+
+
+    /*
+     * Runs the UsbDevice 
+     * Device may be disabled with a UsbDevCommand::Stop send to USB_COMMAND_SIGNAL
+     */
+    fn spawn_usb_task(usb_device: UsbDevice<'static, UsbDriver>, spawner: &Spawner) -> ConnectionResult<()> {
+        #[embassy_executor::task]
+        async fn usb_task(mut usb: UsbDevice<'static, UsbDriver>) {
+            match select(usb.run(), USB_STOP_SIGNAL.wait()).await {
+                select::Either::First(_) => unreachable!(),
+                select::Either::Second(_) => usb.disable().await
+            }
+        }
+
+        spawner.spawn(usb_task(usb_device).map_err(
+            |_| ConnectionError::TaskSpawnError
+        )?);
+
+
+        Ok(())
+    }
+}
+
+
+impl MessageReader<Command> for UsbConnection {
+    fn frame_reader(&mut self) -> &mut tacklebox_core::comms::reader::FrameReader {
+        &mut self.frame_reader
+    }
+
+    async fn read_packet(&mut self, packet_buf: &mut [u8; MAX_PACKET_SIZE]) -> MessageReaderResult<usize> {
+        self.class
+            .read_packet(packet_buf)
+            .await
+            .map_err(|_| MessageReaderError::ReadError)
+    }
+}
+
+impl MessageWriter<Response> for UsbConnection {
+    async fn write_packet(&mut self, packet_data: &[u8]) -> MessageWriterResult<()> {
+        self.class
+            .write_packet(packet_data)
+            .await
+            .map_err(|_| MessageWriterError::WriteError)
+    }
+}
+
+impl EmbeddedConnection for UsbConnection {
+    fn get_io_task() -> impl IoTask<Self> {
+        #[embassy_executor::task]
+        async fn io_task(connection: UsbConnection) {
+            connection.handle_io().await;
+        }
+
+        io_task
+    }
+
+    fn shutdown_connection(self) -> ConnectionResult<()> {
+        todo!()
+    }
+}
+</file>
+
+<file path="tacklebox-client/Cargo.toml">
+[package]
+name = "tacklebox-client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true }
+tokio-serial = "5.5.0"
+tacklebox-core = { path = "../tacklebox-core", features = ["client"] }
+</file>
+
+<file path="tacklebox-core/src/comms/mod.rs">
+pub mod consts;
+pub mod errors;
+pub mod messages;
+pub mod reader;
+pub mod writer;
+</file>
+
+<file path="tacklebox-pico/src/comms/errors.rs">
+use core::{error::Error, fmt::{Display}};
+
+use embassy_usb::driver::EndpointError;
+
+
+pub type CommunicationResult<T> = core::result::Result<T, CommunicationError>;
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(u8)]
+pub enum CommunicationError {
+    BufferOverflow = 0,
+    DeviceDisabled
+}
+
+impl Display for CommunicationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::BufferOverflow => write!(f, "BufferOverflow when writing data"),
+            Self::DeviceDisabled => write!(f, "Attempted to send data to a disabled device")
+        }
+    }
+}
+
+impl Error for CommunicationError {}
+
+impl From<EndpointError> for CommunicationError {
+    fn from(value: EndpointError) -> Self {
+        match value {
+            EndpointError::BufferOverflow => Self::BufferOverflow,
+            EndpointError::Disabled => Self::DeviceDisabled
+        }
+    }
+}
+
+
+
+
+pub type ConnectionResult<T> = core::result::Result<T, ConnectionError>;
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(u8)]
+pub enum ConnectionError {
+    IoTaskSpawnError = 0,
+    FlashFetchError,
+    SerialParseError,
+    TaskSpawnError
+}
+
+impl Display for ConnectionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::IoTaskSpawnError => write!(f, "Failed to spawn IO task"),
+            Self::FlashFetchError => write!(f, "Failed to fetch unique id from flash"),
+            Self::SerialParseError => write!(f, "Failed to parse data into serial no."),
+            Self::TaskSpawnError => write!(f, "Failed to spawn connection task")
+        }
+    }
+}
+
+impl Error for ConnectionError {}
+</file>
+
+<file path="tacklebox-pico/src/main.rs">
+#![no_std]
+#![no_main]
+
+use embassy_executor::Spawner;
+use embassy_rp::{self as _, gpio::Output};
+use embassy_time::{Duration, Timer};
+use panic_halt as _;
+
+use crate::comms::{command_executor::CommandExecutor, connection::EmbeddedConnection, usb::UsbConnection};
+
+mod comms;
+
+
+#[embassy_executor::task]
+async fn process_commands() {
+    CommandExecutor::run().await;
+}
+
+
+#[embassy_executor::main]
+async fn main(spawner: Spawner) {
+    let p = embassy_rp::init(Default::default());
+
+    let conn = UsbConnection::new(
+        p.USB,
+        p.FLASH,
+        &spawner
+    ).unwrap();
+
+    conn.spawn_io_task(&spawner).unwrap();
+
+    spawner.spawn(process_commands().unwrap());
+
+    let mut main_led = Output::new(p.PIN_25, embassy_rp::gpio::Level::Low);
+
+    loop {
+        main_led.set_low();
+         Timer::after(Duration::from_millis(500)).await;
+         main_led.set_high();
+         Timer::after(Duration::from_millis(500)).await;
+  }
+}
+</file>
+
+<file path="tacklebox-core/src/lib.rs">
+#![no_std]
+
+#[cfg(any(feature = "client", feature = "host"))]
+pub mod comms;
+</file>
+
+<file path="tacklebox-core/Cargo.toml">
+[package]
+name = "tacklebox-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+heapless = { workspace = true }
+postcard = "1.1.3"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[features]
+default = []
+host = []
+client = []
+</file>
+
+<file path="tacklebox-pico/Cargo.toml">
+[package]
+name = "tacklebox-pico"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cortex-m-rt = "0.7.6"
+embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread"] }
+embassy-futures = "0.1.2"
+embassy-rp = { version = "0.10.0", features = ["rp2040", "time-driver", "critical-section-impl"] }
+embassy-sync = "0.8.0"
+embassy-time = { version = "0.5.1", features = ["tick-hz-1_000_000"] }
+embassy-usb = "0.6.0"
+heapless = { workspace = true }
+panic-halt = "1.0.0"
+portable-atomic = { version = "1.15.0", default-features = false, features = ["critical-section"] }
+static_cell = "2.1.1"
+tacklebox-core = { path = "../tacklebox-core", features = ["host"] }
+
+[profile.dev]
+panic = "abort"
+opt-level = "s"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
+codegen-units = 1
+</file>
+
+<file path="Cargo.toml">
+[workspace]
+members = [
+    "tacklebox-client",
+    "tacklebox-core",
+    "tacklebox-pico"
+]
+
+resolver = "3"
+
+[workspace.dependencies]
+tokio = { version = "1.53.1", features = ["full"] }
+heapless = { version = "0.9.3", features = ["serde"] }
+</file>
+
+<file path="tacklebox-core/src/comms/messages.rs">
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+
+use crate::comms::consts::MAX_FRAME_SIZE;
+use crate::comms::errors::{MessageError, MessageResult};
+
+
+
+pub trait Message: 
+    Serialize
+    + DeserializeOwned
+    + Default
+    + Send
+{
+    fn place_in_frame(&self, frame_buf: &mut [u8; MAX_FRAME_SIZE]) -> MessageResult<usize> {
+        postcard::to_slice_cobs(self, frame_buf.as_mut_slice())
+            .map(|frame| frame.len())
+            .map_err(MessageError::SerializeError)
+    }
+}
+
+
+/*
+ * Command/Response objects form a communication channel
+ * between client and host
+ *
+ * - Client sends Command to Host
+ * - Host processes Command into Response
+ * - Host sends Response(s) to Client
+ * - Client handles Response
+ */
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+pub enum Command {
+    #[default]
+    InvalidCommand,
+    InternalError,
+
+    EchoU8(u8),
+    ShutdownConnection,
+}
+
+impl Message for Command {}
+
+
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+pub enum Response {
+    #[default]
+    InvalidCommand,
+    InternalError,
+
+    EchoU8(u8),
+    ShutdownConnection,
+}
+
+impl Message for Response {}
+</file>
+
+</files>

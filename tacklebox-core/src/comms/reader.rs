@@ -64,11 +64,9 @@ impl Default for FrameReader {
 pub trait MessageReader<M: Message> {
     fn frame_reader(&mut self) -> &mut FrameReader;
 
-    fn read_packet(&mut self, packet_buf: &mut [u8; MAX_PACKET_SIZE]) -> impl Future<Output = MessageReaderResult<usize>> + Send;
+    fn read_packet(&mut self, packet_buf: &mut [u8; MAX_PACKET_SIZE]) -> impl Future<Output = MessageReaderResult<usize>>;
 
-    fn read_message<'a>(&'a mut self) -> impl Future<Output = MessageReaderResult<M>> + Send + use<'a, M, Self>
-    where
-        Self: Send
+    fn read_message<'a>(&'a mut self) -> impl Future<Output = MessageReaderResult<M>>
     {
         async move {
             loop {
