@@ -14,7 +14,7 @@ pub trait MessageWriter<M: Message> {
         async move {
             let mut frame_buf = [0u8; MAX_FRAME_SIZE];
             let frame_len = message
-                .to_frame(&mut frame_buf)
+                .place_in_frame(&mut frame_buf)
                 .map_err(MessageWriterError::SerializeError)?;
 
             for packet_data in frame_buf[..frame_len].chunks(MAX_PACKET_SIZE) {

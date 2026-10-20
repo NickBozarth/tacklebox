@@ -130,7 +130,7 @@ mod message_tests {
         let (mut tx, mut rx) = new_tx_rx::<Command>();
 
         let mut frame_buf = [0u8; MAX_FRAME_SIZE];
-        Command::EchoU8(10).to_frame(&mut frame_buf).expect("Failed to serialize");
+        Command::EchoU8(10).place_in_frame(&mut frame_buf).expect("Failed to serialize");
 
         for byte in frame_buf {
             tx.write_packet(&[byte]).await.expect("Failed write");
@@ -152,7 +152,7 @@ mod message_tests {
             for i in 0..NUM_MESSAGES {
                 let mut curr_message_buf = [0u8; MAX_FRAME_SIZE];
                 let cur_message_len = Command::EchoU8(i)
-                    .to_frame(&mut curr_message_buf)
+                    .place_in_frame(&mut curr_message_buf)
                     .expect("Failed to serialize");
 
                 assert!(message_len + cur_message_len <= MAX_FRAME_SIZE - 1, "Full message exceeds one frame minus delimiter");
