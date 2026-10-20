@@ -32,7 +32,6 @@ struct PendingCommand {
     pub response_signal: Arc<ResponseArcPool>
 }
 
-unsafe impl Send for PendingCommand {}
 
 
 /*

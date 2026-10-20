@@ -6,7 +6,7 @@ use embassy_rp::{self as _, gpio::Output};
 use embassy_time::{Duration, Timer};
 use panic_halt as _;
 
-use crate::comms::{command_executor::CommandExecutor, connection::Connection, usb::UsbConnection};
+use crate::comms::{command_executor::{CommandExecutor, init_response_pool}, connection::EmbeddedConnection, usb::UsbConnection};
 
 mod comms;
 
@@ -20,6 +20,8 @@ async fn process_commands() {
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
+
+    init_response_pool();
 
     let conn = UsbConnection::new(
         p.USB,
