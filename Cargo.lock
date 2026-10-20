@@ -1672,6 +1672,7 @@ dependencies = [
  "heapless 0.9.3",
  "postcard",
  "serde",
+ "tokio",
 ]
 
 [[package]]

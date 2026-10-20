@@ -5,7 +5,12 @@ use crate::comms::errors::{MessageError, MessageResult};
 
 
 
-pub trait Message: Serialize + DeserializeOwned + Default {
+pub trait Message: 
+    Serialize
+    + DeserializeOwned
+    + Default
+    + Send
+{
     fn to_frame(&self, frame_buf: &mut [u8; MAX_FRAME_SIZE]) -> MessageResult<usize> {
         postcard::to_slice_cobs(self, frame_buf.as_mut_slice())
             .map(|frame| frame.len())

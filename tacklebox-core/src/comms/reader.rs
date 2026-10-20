@@ -54,6 +54,13 @@ impl FrameReader {
     }
 }
 
+impl Default for FrameReader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
 pub trait MessageReader<M: Message> {
     fn frame_reader(&mut self) -> &mut FrameReader;
 
