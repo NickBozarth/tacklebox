@@ -11,6 +11,7 @@ pub enum MessageReaderError {
     DeserError,
     Disconnected,
     Empty,
+    ReadError,
 }
 pub type MessageReaderResult<T> = Result<T, MessageReaderError>;
 
@@ -19,5 +20,6 @@ pub type MessageReaderResult<T> = Result<T, MessageReaderError>;
 pub enum MessageWriterError {
     Disconnected,
     SerializeError(MessageError),
+    WriteError,
 }
 pub type MessageWriterResult<T> = Result<T, MessageWriterError>;

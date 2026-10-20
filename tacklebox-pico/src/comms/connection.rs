@@ -1,40 +1,24 @@
 use embassy_executor::{SpawnError, SpawnToken, Spawner};
-use tacklebox_core::comms::{messages::{Command, Response}, packet_data::PacketData};
+use tacklebox_core::comms::{errors::MessageWriterError, messages::{Command, Response}, reader::MessageReader, writer::MessageWriter};
 
-use crate::comms::{command_executor::send_global_command, errors::{CommunicationError, CommunicationResult, ConnectionError, ConnectionResult}};
+use crate::comms::{command_executor::send_global_command, errors::{ConnectionError, ConnectionResult}};
 
 
-pub trait Connection: Sized {
-    fn send_bytes(&mut self, data: &[u8]) -> impl Future<Output = CommunicationResult<usize>>;
-    fn recieve_bytes(&mut self) -> impl Future<Output = CommunicationResult<PacketData>>;
-
+pub trait EmbeddedConnection: MessageReader<Command> + MessageWriter<Response> + Sized {
     fn get_io_task() -> impl IoTask<Self>;
     fn shutdown_connection(self) -> ConnectionResult<()>;
 
-
-    async fn send_response(&mut self, response: &Response) -> CommunicationResult<usize> {
-        let pd = response.as_packet_data();
-        Self::send_bytes(self, pd.as_slice())
-            .await
-    }
-
-    async fn recieve_command(&mut self) -> CommunicationResult<Command> {
-        Self::recieve_bytes(self)
-            .await
-            .map(|pd| pd.into_command())
-    }
-
     async fn handle_io(mut self) {
         loop {
-            let command = self.recieve_command()
+            let command = self.read_message()
                 .await
-                .unwrap_or(Command::InternalError);
+                .unwrap_or(Command::default());
 
             let response = send_global_command(command).await;
 
-            let send_res = self.send_response(&response).await;
-            if send_res == Err(CommunicationError::DeviceDisabled) {
-                break;
+            match self.write_message(&response).await {
+                Err(MessageWriterError::Disconnected) => continue,
+                _ => {}
             }
 
             if response == Response::ShutdownConnection {
@@ -57,13 +41,13 @@ pub trait Connection: Sized {
  * Task that handles all io and potential destruction of connection
  * NOTE embassy_executor::task cannot use generics and this is the workaround
  */
-pub trait IoTask<T: Connection> {
+pub trait IoTask<T: EmbeddedConnection> {
     fn spawn_io_task(self, connection: T, spawner: &Spawner) -> ConnectionResult<()>;
 }
 
 impl <T, F, S> IoTask<T> for F
 where
-    T: Connection,
+    T: EmbeddedConnection,
     F: Fn(T) -> Result<SpawnToken<S>, SpawnError>,
     S: Sized
 {

@@ -45,7 +45,6 @@ impl CommandExecutor {
             Command::InternalError => Response::InternalError,
             Command::ShutdownConnection => Response::ShutdownConnection,
             Command::EchoU8(n) => Response::EchoU8(n),
-            Command::PollErrors => todo!()
         }
     }
 }

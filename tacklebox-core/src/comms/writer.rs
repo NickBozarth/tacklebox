@@ -4,7 +4,7 @@ use crate::comms::messages::Message;
 
 
 pub trait MessageWriter<M: Message> {
-    fn write_packet(&mut self, packet_data: &[u8]) -> impl Future<Output = MessageWriterResult<()>> + Send;
+    fn write_packet(&mut self, packet_data: &[u8]) -> impl Future<Output = MessageWriterResult<()>>;
 
     // Convert message to frame
     // Convert frame to packets

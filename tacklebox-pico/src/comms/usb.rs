@@ -6,9 +6,9 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, once_lock::Once
 use embassy_usb::{Builder, Config, UsbDevice, class::cdc_acm::{CdcAcmClass, State}};
 use heapless::String;
 use static_cell::StaticCell;
-use tacklebox_core::comms::packet_data::{MAX_PACKET_SIZE, PacketData};
+use tacklebox_core::comms::{consts::MAX_PACKET_SIZE, errors::{MessageReaderError, MessageReaderResult, MessageWriterError, MessageWriterResult}, messages::{Command, Response}, reader::{FrameReader, MessageReader}, writer::MessageWriter};
 
-use crate::comms::{connection::{Connection, IoTask}, errors::{CommunicationError, CommunicationResult, ConnectionError, ConnectionResult}};
+use crate::comms::{connection::{EmbeddedConnection, IoTask}, errors::{ConnectionError, ConnectionResult}};
 
 
 type UsbDriver = embassy_rp::usb::Driver<'static, embassy_rp::peripherals::USB>;
@@ -22,7 +22,8 @@ bind_interrupts!(struct UsbIrqs {
 
 
 pub struct UsbConnection {
-    class: CdcAcmClass<'static, UsbDriver>
+    class: CdcAcmClass<'static, UsbDriver>,
+    frame_reader: FrameReader
 }
 
 impl UsbConnection {
@@ -51,7 +52,10 @@ impl UsbConnection {
         let usb_device = builder.build();
         Self::spawn_usb_task(usb_device, spawner)?;
 
-        Ok(Self { class })
+        Ok(Self {
+            class,
+            frame_reader: FrameReader::new()
+        })
     }
 
 
@@ -134,24 +138,29 @@ impl UsbConnection {
 }
 
 
-impl Connection for UsbConnection {
-    async fn send_bytes(&mut self, data: &[u8]) -> CommunicationResult<usize> {
-        self.class
-            .write_packet(data)
-            .await
-            .map(|_| data.len())
-            .map_err(|e| CommunicationError::from(e))
+impl MessageReader<Command> for UsbConnection {
+    fn frame_reader(&mut self) -> &mut tacklebox_core::comms::reader::FrameReader {
+        &mut self.frame_reader
     }
 
-    async fn recieve_bytes(&mut self) -> CommunicationResult<PacketData> {
-        let mut buf = [0u8; MAX_PACKET_SIZE];
+    async fn read_packet(&mut self, packet_buf: &mut [u8; MAX_PACKET_SIZE]) -> MessageReaderResult<usize> {
         self.class
-            .read_packet(&mut buf)
+            .read_packet(packet_buf)
             .await
-            .map(|len| PacketData::new(buf, len))
-            .map_err(|e| CommunicationError::from(e))
+            .map_err(|_| MessageReaderError::ReadError)
     }
+}
 
+impl MessageWriter<Response> for UsbConnection {
+    async fn write_packet(&mut self, packet_data: &[u8]) -> MessageWriterResult<()> {
+        self.class
+            .write_packet(packet_data)
+            .await
+            .map_err(|_| MessageWriterError::WriteError)
+    }
+}
+
+impl EmbeddedConnection for UsbConnection {
     fn get_io_task() -> impl IoTask<Self> {
         #[embassy_executor::task]
         async fn io_task(connection: UsbConnection) {
