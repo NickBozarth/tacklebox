@@ -1,6 +1,10 @@
 
-use crate::storage::{constants::{ERASE_PAGE_SIZE, WRITE_PAGE_SIZE}, errors::{WritePageError, WritePageResult}};
+use embassy_rp::{flash::{self, Flash}, peripherals::FLASH};
 
+use crate::storage::{constants::{ERASE_PAGE_SIZE, TOTAL_FLASH_SIZE, WRITE_PAGE_SIZE}, errors::{WritePageError, WritePageResult}};
+
+
+pub type AsyncFlash<'d> = Flash<'d, FLASH, flash::Async, TOTAL_FLASH_SIZE>;
 
 /*
  * Assign version num by setting X of the final bits to 0
@@ -39,6 +43,10 @@ pub unsafe trait FlashPage<const PAGE_SIZE: usize>: Sized {
     fn as_slice(&self) -> &[u8; PAGE_SIZE] {
         // SAFETY: size and alignment is checked when safely implementing trait
         unsafe { &*(self as *const Self as *const [u8; PAGE_SIZE]) }
+    }
+
+    fn as_slice_mut(&mut self) -> &mut [u8; PAGE_SIZE] {
+        unsafe { &mut *(self as *mut Self as *mut [u8; PAGE_SIZE]) }
     }
 }
 

@@ -17,8 +17,12 @@ pub type WritePageResult<T> = Result<T, WritePageError>;
 #[derive(Debug, PartialEq, Clone)]
 pub enum VaultError {
     CryptoError(CryptoError),
+    EraseNecessary,
+    FlashWriteError,
     InvalidEntry,
     InvalidHeader,
+    InvalidPageIndex,
     InvalidPassphrase,
+    InvalidVaultIndex,
 }
 pub type VaultResult<T> = Result<T, VaultError>;
