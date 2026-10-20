@@ -1,7 +1,7 @@
 use aes_gcm::{AeadInOut, Aes256Gcm, Key, KeyInit, Nonce, Tag, aead::consts::U12, aes::cipher::InOutBuf};
 use embassy_rp::clocks::RoscRng;
 use pbkdf2::{pbkdf2_hmac, sha2::{Sha256}};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::storage::{constants::{AES_KEY_LEN, AES_NONCE_SIZE, PBKDF2_ITERATIONS, PBKDF2_SALT_LEN}, errors::{CryptoError, CryptoResult}};
 
@@ -61,16 +61,21 @@ impl<'a> Drop for UnbuiltPassphrase<'a> {
 }
 
 
+pub trait PlaintextBuffer {
+    fn len(&self) -> usize;
+    fn as_slice(&self) -> &[u8];
+}
+
 // Wrapper around a buffer that contains a plaintext buffer
 // Struct will zeroize on drop so data does not linger in RAM
 pub struct Plaintext<'a>(&'a mut [u8]);
 
-impl<'a> Plaintext<'a> {
-    pub fn len(&self) -> usize {
+impl<'a> PlaintextBuffer for Plaintext<'a> {
+    fn len(&self) -> usize {
         self.0.len()
     }
 
-    pub fn as_slice(&self) -> &[u8] {
+    fn as_slice(&self) -> &[u8] {
         self.0
     }
 }
@@ -78,6 +83,49 @@ impl<'a> Plaintext<'a> {
 impl<'a> Drop for Plaintext<'a> {
     fn drop(&mut self) {
         self.0.zeroize();
+    }
+}
+
+pub struct StaticPlaintext(&'static [u8]);
+
+impl StaticPlaintext {
+    pub fn new(plaintext: &'static [u8]) -> Self {
+        Self(plaintext)
+    }
+}
+
+impl PlaintextBuffer for StaticPlaintext {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        self.0
+    }
+}
+
+#[derive(ZeroizeOnDrop)]
+pub struct OwnedPlaintext<const N: usize> {
+    plaintext: [u8; N],
+    len: usize
+}
+
+impl<const N: usize> OwnedPlaintext<N> {
+    pub fn new(plaintext: [u8; N], len: usize) -> Self {
+        Self {
+            plaintext,
+            len
+        }
+    }
+}
+
+impl<const N: usize> PlaintextBuffer for OwnedPlaintext<N> {
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        &self.plaintext[..self.len]
     }
 }
 
@@ -99,7 +147,7 @@ pub struct Ciphertext<const MAX_TEXT_SIZE: usize> {
 }
 
 impl<const MAX_TEXT_SIZE: usize> Ciphertext<MAX_TEXT_SIZE> {
-    pub fn new(plaintext: Plaintext<'_>, passphrase: Passphrase) -> CryptoResult<Self> {
+    pub fn new<P: PlaintextBuffer>(plaintext: P, passphrase: Passphrase) -> CryptoResult<Self> {
         let key = passphrase.as_key();
         let cipher = Aes256Gcm::new(&key);
         let nonce_bytes: [u8; AES_NONCE_SIZE] = rand_array();
@@ -134,20 +182,21 @@ impl<const MAX_TEXT_SIZE: usize> Ciphertext<MAX_TEXT_SIZE> {
     pub fn decrypt(
         &self,
         passphrase: &Passphrase,
-        out_buffer: &mut [u8; MAX_TEXT_SIZE]
-    ) -> CryptoResult<()> {
+    ) -> CryptoResult<OwnedPlaintext<MAX_TEXT_SIZE>> {
         let key = passphrase.as_key();
         let cipher = Aes256Gcm::new(&key);
 
+        let mut plaintext = [0u8; MAX_TEXT_SIZE];
         let valid_len = usize::min(self.data_len as usize, MAX_TEXT_SIZE);
 
         cipher
             .decrypt_inout_detached(
                 &self.nonce,
                 b"",
-                InOutBuf::from(&mut out_buffer[..valid_len]),
+                InOutBuf::from(&mut plaintext[..valid_len]),
                 &self.tag
             )
+            .map(|_| OwnedPlaintext::new(plaintext, valid_len))
             .map_err(|_| CryptoError::DecryptionError)
     }
 }

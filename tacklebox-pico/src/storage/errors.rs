@@ -3,7 +3,6 @@ pub enum CryptoError {
     DecryptionError,
     EncryptionError,
 }
-
 pub type CryptoResult<T> = Result<T, CryptoError>;
 
 
@@ -12,5 +11,14 @@ pub enum WritePageError {
     InvalidAlignment,
     InvalidLength,
 }
-
 pub type WritePageResult<T> = Result<T, WritePageError>;
+
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum VaultError {
+    CryptoError(CryptoError),
+    InvalidEntry,
+    InvalidHeader,
+    InvalidPassphrase,
+}
+pub type VaultResult<T> = Result<T, VaultError>;
