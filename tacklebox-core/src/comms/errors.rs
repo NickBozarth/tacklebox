@@ -9,12 +9,15 @@ pub type MessageResult<T> = Result<T, MessageError>;
 pub enum MessageReaderError {
     BufferOverflow,
     DeserError,
+    Disconnected,
+    Empty,
 }
 pub type MessageReaderResult<T> = Result<T, MessageReaderError>;
 
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum MessageWriterError {
-    SerializeError(MessageError)
+    Disconnected,
+    SerializeError(MessageError),
 }
 pub type MessageWriterResult<T> = Result<T, MessageWriterError>;
