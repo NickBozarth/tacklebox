@@ -17,8 +17,6 @@ use tacklebox_core::comms::{messages::{Command, Response}, reader::MessageReader
             .await
             .expect("Failed read");
 
-        println!("Resp {resp:?}");
-
         assert!(resp == Response::EchoU8(10));
     }
 }
