@@ -9,6 +9,7 @@ use panic_halt as _;
 use crate::comms::{command_executor::{CommandExecutor, init_response_pool}, connection::EmbeddedConnection, usb::UsbConnection};
 
 mod comms;
+mod storage;
 
 
 #[embassy_executor::task]
