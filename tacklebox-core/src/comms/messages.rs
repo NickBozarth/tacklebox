@@ -11,7 +11,7 @@ pub trait Message:
     + Default
     + Send
 {
-    fn to_frame(&self, frame_buf: &mut [u8; MAX_FRAME_SIZE]) -> MessageResult<usize> {
+    fn place_in_frame(&self, frame_buf: &mut [u8; MAX_FRAME_SIZE]) -> MessageResult<usize> {
         postcard::to_slice_cobs(self, frame_buf.as_mut_slice())
             .map(|frame| frame.len())
             .map_err(MessageError::SerializeError)
