@@ -83,3 +83,14 @@ impl EntryId {
         Self(id)
     }
 }
+
+
+pub struct TruncatingBuf<'a>(&'a [u8]);
+
+impl<'a> TruncatingBuf<'a> {
+    pub fn copy_truncating<const N: usize>(&self, buf: &mut [u8; N]) -> usize {
+        let len = usize::min(buf.len(), N);
+        buf[..len].copy_from_slice(&self.0[..len]);
+        len
+    }
+}
