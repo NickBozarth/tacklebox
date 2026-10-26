@@ -1,4 +1,5 @@
 // NOTE if this enum is updated, add new pattern to VaultVersion::from_u8
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum VaultVersion {
     Unspecified = 0xFF,
@@ -16,6 +17,7 @@ impl VaultVersion {
 
 
 // NOTE if this enum is updated, add new pattern to VaultStatus::from_u8
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum VaultStatus {
     Unused   = 0xFF,
@@ -36,8 +38,48 @@ impl VaultStatus {
 }
 
 
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct VaultId(u32);
 
+impl VaultId {
+    pub const INVALID: Self = Self(u32::MAX);
+
+    pub const fn id(&self) -> u32 {
+        self.0
+    }
+
+    pub const fn from_u32(id: u32) -> Self {
+        // TODO bounds check
+        // if id < SOME_VAL {
+        //     Self(id)
+        // } else {
+        //     Self::INVALID
+        // }
+
+        Self(id)
+    }
+}
+
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct EntryId(u32);
+
+impl EntryId {
+    pub const INVALID: Self = Self(u32::MAX);
+
+    pub const fn id(&self) -> u32 {
+        self.0
+    }
+
+    pub const fn from_u32(id: u32) -> Self {
+        // TODO bounds check
+        // if id < SOME_VAL {
+        //     Self(id)
+        // } else {
+        //     Self::INVALID
+        // }
+
+        Self(id)
+    }
+}

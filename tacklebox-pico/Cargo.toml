@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "arrayvec"] }
 bytemuck = { version = "1.25.2", features = ["derive", "min_const_generics"] }
 cortex-m-rt = "0.7.6"
 embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread"] }
@@ -14,6 +15,7 @@ embassy-time = { version = "0.5.1", features = ["tick-hz-1_000_000"] }
 embassy-usb = "0.6.0"
 heapless = { workspace = true, features = ["portable-atomic"] }
 panic-halt = "1.0.0"
+pbkdf2 = { version = "0.13.0", default-features = false, features = ["sha2", "hmac"] }
 portable-atomic = { version = "1.15.0", default-features = false, features = ["critical-section"] }
 static_cell = "2.1.1"
 tacklebox-core = { path = "../tacklebox-core", features = ["host"] }
