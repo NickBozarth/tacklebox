@@ -6,7 +6,7 @@ use pbkdf2::sha2::{Digest, Sha256};
 use rand_chacha::{ChaCha20Rng, rand_core::{Rng, SeedableRng}};
 use zeroize::Zeroize;
 
-use crate::storage::consts::SEED_SAMPLES;
+use crate::storage::consts::{PBKDF2_SALT_LEN, SEED_SAMPLES};
 
 
 static RNG: Mutex<CriticalSectionRawMutex, RefCell<Option<ChaCha20Rng>>> = Mutex::new(RefCell::new(None));
@@ -54,7 +54,7 @@ pub async fn init_rng(
     RNG.lock(|cell| *cell.borrow_mut() = Some(rng) );
 }
 
-pub fn fill_bytes(dst: &mut[u8]) {
+pub fn rng_fill_bytes(dst: &mut[u8]) {
     RNG.lock(|cell| {
         cell
             .borrow_mut()

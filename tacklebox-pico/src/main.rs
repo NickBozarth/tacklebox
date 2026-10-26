@@ -2,11 +2,11 @@
 #![no_main]
 
 use embassy_executor::Spawner;
-use embassy_rp::{self as _, gpio::Output};
+use embassy_rp::{self as _, adc::{Adc, Channel, Config as AdcConfig}, gpio::Output};
 use embassy_time::{Duration, Timer};
 use panic_halt as _;
 
-use crate::comms::{command_executor::{CommandExecutor, init_response_pool}, connection::EmbeddedConnection, usb::UsbConnection};
+use crate::{comms::{command_executor::{CommandExecutor, init_response_pool}, connection::EmbeddedConnection, usb::UsbConnection}, storage::rng::init_rng};
 
 mod comms;
 mod storage;
@@ -23,6 +23,10 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
     init_response_pool();
+
+    let mut adc = Adc::new_blocking(p.ADC, AdcConfig::default());
+    let mut adc_pin = Channel::new_pin(p.PIN_26, embassy_rp::gpio::Pull::None);
+    init_rng(&mut adc, &mut adc_pin).await;
 
     let conn = UsbConnection::new(
         p.USB,
@@ -41,5 +45,5 @@ async fn main(spawner: Spawner) {
          Timer::after(Duration::from_millis(500)).await;
          main_led.set_high();
          Timer::after(Duration::from_millis(500)).await;
-  }
+    }
 }

@@ -3,6 +3,7 @@ pub const PBKDF2_ITERATIONS: u32 = 50_000;
 pub const AES256GCM_NONCE_LEN: usize = 12;
 pub const AES256GCM_TAG_LEN: usize = 16;
 pub const AES256GCM_KEY_LEN: usize = 32;
+pub const AAD_LEN: usize = AES256GCM_NONCE_LEN + PBKDF2_SALT_LEN;
 
 pub const SEED_SAMPLES: usize = 512;
 

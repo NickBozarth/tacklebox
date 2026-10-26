@@ -1,3 +1,5 @@
+use zeroize::{Zeroize, ZeroizeOnDrop};
+
 // NOTE if this enum is updated, add new pattern to VaultVersion::from_u8
 #[derive(Clone, Copy)]
 #[repr(u8)]
@@ -88,9 +90,31 @@ impl EntryId {
 pub struct TruncatingBuf<'a>(&'a [u8]);
 
 impl<'a> TruncatingBuf<'a> {
-    pub fn copy_truncating<const N: usize>(&self, buf: &mut [u8; N]) -> usize {
-        let len = usize::min(buf.len(), N);
+    pub fn new(buf: &'a [u8]) -> Self {
+        Self(buf)
+    }
+
+    fn len(&self, truncate_len: usize) -> usize {
+        usize::min(self.0.len(), truncate_len)
+    }
+
+    pub fn copy_to_buf_truncating<const N: usize>(&self, buf: &mut [u8; N]) -> usize {
+        let len = self.len(N);
         buf[..len].copy_from_slice(&self.0[..len]);
         len
+    }
+}
+
+
+#[derive(Zeroize, ZeroizeOnDrop)]
+pub struct ZeroizingBuf<const N: usize> {
+    bytes: [u8; N],
+    bytes_len: usize
+}
+
+impl<const N: usize> ZeroizingBuf<N> {
+    pub fn new(bytes: [u8; N], bytes_len: usize) -> Self {
+        let bytes_len = usize::min(bytes_len, N);
+        Self { bytes, bytes_len }
     }
 }
