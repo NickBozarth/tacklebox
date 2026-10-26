@@ -17,8 +17,10 @@ heapless = { workspace = true, features = ["portable-atomic"] }
 panic-halt = "1.0.0"
 pbkdf2 = { version = "0.13.0", default-features = false, features = ["sha2", "hmac"] }
 portable-atomic = { version = "1.15.0", default-features = false, features = ["critical-section"] }
+rand_chacha = { version = "0.10.0", default-features = false }
 static_cell = "2.1.1"
 tacklebox-core = { path = "../tacklebox-core", features = ["host"] }
+zeroize = { workspace = true }
 
 [profile.dev]
 panic = "abort"
