@@ -5,6 +5,8 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use heapless::{arc_pool, pool::arc::{Arc, ArcBlock}};
 use tacklebox_core::comms::messages::{Command, Response};
 
+use crate::comms::connection::ConnectionId;
+
 
 type ResponseSignal = Signal<CriticalSectionRawMutex, Response>;
 arc_pool!(ResponseArcPool: ResponseSignal);
@@ -28,6 +30,7 @@ const COMMAND_CAPACITY: usize = 8;
 static COMMAND_CHANNEL: Channel<CriticalSectionRawMutex, PendingCommand, COMMAND_CAPACITY> = Channel::new();
 
 struct PendingCommand {
+    pub connection_id: ConnectionId,
     pub command: Command,
     pub response_signal: Arc<ResponseArcPool>
 }
@@ -47,7 +50,7 @@ async fn get_response_signal() -> Arc<ResponseArcPool> {
     }
 }
 
-pub async fn send_global_command(command: Command) -> Response {
+pub async fn send_global_command(connection_id: ConnectionId, command: Command) -> Response {
     /*
      * Attempt to get a response signal
      * If response signal takes more than 500ms to get, it creates an InternalError
@@ -58,6 +61,7 @@ pub async fn send_global_command(command: Command) -> Response {
     };
 
     let pc = PendingCommand {
+        connection_id,
         command,
         response_signal: response_signal.clone()
     };
@@ -73,12 +77,12 @@ impl CommandExecutor {
     pub async fn run() {
         loop {
             let pc = COMMAND_CHANNEL.receive().await;
-            let response = Self::execute_command(pc.command).await;
+            let response = Self::execute_command(pc.connection_id, pc.command).await;
             pc.response_signal.signal(response);
         }
     }
 
-    pub async fn execute_command(command: Command) -> Response {
+    pub async fn execute_command(connection_id: ConnectionId, command: Command) -> Response {
         match command {
             Command::InvalidCommand => Response::InvalidCommand,
             Command::InternalError => Response::InternalError,

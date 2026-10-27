@@ -6,7 +6,7 @@ use embassy_rp::{self as _, adc::{Adc, Channel, Config as AdcConfig}, gpio::Outp
 use embassy_time::{Duration, Timer};
 use panic_halt as _;
 
-use crate::{comms::{command_executor::{CommandExecutor, init_response_pool}, connection::EmbeddedConnection, usb::UsbConnection}, storage::rng::init_rng};
+use crate::{comms::{command_executor::{CommandExecutor, init_response_pool}, connection::{ConnectionId, EmbeddedConnection}, usb::UsbConnection}, storage::rng::init_rng};
 
 mod comms;
 mod storage;
@@ -34,7 +34,7 @@ async fn main(spawner: Spawner) {
         &spawner
     ).unwrap();
 
-    conn.spawn_io_task(&spawner).unwrap();
+    conn.spawn_io_task(&spawner, ConnectionId::from_u32(0)).unwrap();
 
     spawner.spawn(process_commands().unwrap());
 

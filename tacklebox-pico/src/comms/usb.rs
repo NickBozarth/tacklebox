@@ -8,7 +8,7 @@ use heapless::String;
 use static_cell::StaticCell;
 use tacklebox_core::comms::{consts::MAX_PACKET_SIZE, errors::{MessageReaderError, MessageReaderResult, MessageWriterError, MessageWriterResult}, messages::{Command, Response}, reader::{FrameReader, MessageReader}, writer::MessageWriter};
 
-use crate::comms::{connection::{EmbeddedConnection, IoTask}, errors::{ConnectionError, ConnectionResult}};
+use crate::comms::{connection::{ConnectionId, EmbeddedConnection, IoTask}, errors::{ConnectionError, ConnectionResult}};
 
 
 type UsbDriver = embassy_rp::usb::Driver<'static, embassy_rp::peripherals::USB>;
@@ -22,6 +22,7 @@ bind_interrupts!(struct UsbIrqs {
 
 
 pub struct UsbConnection {
+    connection_id: ConnectionId,
     class: CdcAcmClass<'static, UsbDriver>,
     frame_reader: FrameReader
 }
@@ -53,6 +54,7 @@ impl UsbConnection {
         Self::spawn_usb_task(usb_device, spawner)?;
 
         Ok(Self {
+            connection_id: 0,
             class,
             frame_reader: FrameReader::new()
         })
@@ -161,6 +163,14 @@ impl MessageWriter<Response> for UsbConnection {
 }
 
 impl EmbeddedConnection for UsbConnection {
+    fn set_connection_id(&mut self, id: ConnectionId) {
+        self.connection_id = id;
+    }
+
+    fn get_connection_id(&self) -> ConnectionId {
+        self.connection_id
+    }
+
     fn get_io_task() -> impl IoTask<Self> {
         #[embassy_executor::task]
         async fn io_task(connection: UsbConnection) {

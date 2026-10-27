@@ -43,7 +43,8 @@ pub enum ConnectionError {
     IoTaskSpawnError = 0,
     FlashFetchError,
     SerialParseError,
-    TaskSpawnError
+    TaskSpawnError,
+    InvalidConnectionId
 }
 
 impl Display for ConnectionError {
@@ -52,7 +53,8 @@ impl Display for ConnectionError {
             Self::IoTaskSpawnError => write!(f, "Failed to spawn IO task"),
             Self::FlashFetchError => write!(f, "Failed to fetch unique id from flash"),
             Self::SerialParseError => write!(f, "Failed to parse data into serial no."),
-            Self::TaskSpawnError => write!(f, "Failed to spawn connection task")
+            Self::TaskSpawnError => write!(f, "Failed to spawn connection task"),
+            Self::InvalidConnectionId => write!(f, "Provided ConnectionId was invalid")
         }
     }
 }

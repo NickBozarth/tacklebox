@@ -7,6 +7,8 @@ pub const AAD_LEN: usize = AES256GCM_NONCE_LEN + PBKDF2_SALT_LEN;
 
 pub const SEED_SAMPLES: usize = 512;
 
+pub const MAX_CONNECTIONS: usize = 1;
+
 // STORAGE CONSTANTS
 pub const FLASH_WRITE_PAGE_SIZE: usize = 256;
 pub const FLASH_ERASE_PAGE_SIZE: usize = 4096;

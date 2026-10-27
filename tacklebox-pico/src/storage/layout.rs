@@ -113,7 +113,7 @@ pub struct RawVaultEntry {
     // Destructured ciphertext object
     nonce: [u8; AES256GCM_NONCE_LEN],
     tag: [u8; AES256GCM_TAG_LEN],
-    ciphertext: [u8; MAX_STRING_LEN]
+    ciphertext: [u8; MAX_STRING_LEN],
 }
 const _: () = assert!(size_of::<RawVaultEntry>() == VAULT_ITEM_SIZE);
 
@@ -136,7 +136,6 @@ impl RawVaultEntry {
 }
 
 
-#[repr(C)]
 pub struct VaultEntry {
     status: VaultStatus,
     version: VaultVersion,

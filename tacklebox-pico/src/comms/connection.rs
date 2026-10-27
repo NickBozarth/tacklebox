@@ -4,7 +4,12 @@ use tacklebox_core::comms::{errors::MessageWriterError, messages::{Command, Resp
 use crate::comms::{command_executor::send_global_command, errors::{ConnectionError, ConnectionResult}};
 
 
+pub const MAX_CONNECTIONS: u32 = 1;
+
 pub trait EmbeddedConnection: MessageReader<Command> + MessageWriter<Response> + Sized {
+    fn set_connection_id(&mut self, connection_id: ConnectionId);
+    fn get_connection_id(&self) -> ConnectionId;
+
     fn get_io_task() -> impl IoTask<Self>;
     fn shutdown_connection(self) -> ConnectionResult<()>;
 
@@ -14,9 +19,10 @@ pub trait EmbeddedConnection: MessageReader<Command> + MessageWriter<Response> +
                 .await
                 .unwrap_or(Command::default());
 
-            let response = send_global_command(command).await;
+            let response = send_global_command(self.get_connection_id(), command).await;
 
             match self.write_message(&response).await {
+                // TODO on disconnect, close current session
                 Err(MessageWriterError::Disconnected) => continue,
                 _ => {}
             }
@@ -29,7 +35,12 @@ pub trait EmbeddedConnection: MessageReader<Command> + MessageWriter<Response> +
         let _ = self.shutdown_connection();
     }
 
-    fn spawn_io_task(self, spawner: &Spawner) -> ConnectionResult<()> {
+    fn spawn_io_task(mut self, spawner: &Spawner, connection_id: ConnectionId) -> ConnectionResult<()> {
+        if !connection_id.is_valid() {
+            return Err(ConnectionError::InvalidConnectionId);
+        }
+
+        self.set_connection_id(connection_id);
         let io_task = Self::get_io_task();
         io_task.spawn_io_task(self, spawner)
     }
@@ -58,5 +69,29 @@ where
         );
 
         Ok(())
+    }
+}
+
+
+#[derive(Clone, Copy)]
+pub struct ConnectionId(u32);
+
+impl ConnectionId {
+    pub const INVALID: Self = Self(u32::MAX);
+
+    pub const fn from_u32(id: u32) -> Self {
+        if id < MAX_CONNECTIONS {
+            Self(id)
+        } else {
+            Self::INVALID
+        }
+    }
+
+    pub const fn id(&self) -> u32 {
+        self.0
+    }
+
+    pub const fn is_valid(&self) -> bool {
+        self.0 != Self::INVALID.0
     }
 }
