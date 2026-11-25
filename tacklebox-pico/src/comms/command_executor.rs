@@ -5,6 +5,8 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use heapless::{arc_pool, pool::arc::{Arc, ArcBlock}};
 use tacklebox_core::comms::messages::{Command, Response};
 
+use crate::crypto::startup::AtCaClientAsync;
+
 
 type ResponseSignal = Signal<CriticalSectionRawMutex, Response>;
 arc_pool!(ResponseArcPool: ResponseSignal);
@@ -67,23 +69,34 @@ pub async fn send_global_command(command: Command) -> Response {
 }
 
 
-pub struct CommandExecutor;
+pub struct CommandExecutor<'d> {
+    pub atca: AtCaClientAsync<'d>
+}
 
-impl CommandExecutor {
-    pub async fn run() {
+impl CommandExecutor<'_> {
+    pub async fn run(mut self) {
         loop {
             let pc = COMMAND_CHANNEL.receive().await;
-            let response = Self::execute_command(pc.command).await;
+            let response = self.execute_command(pc.command).await;
             pc.response_signal.signal(response);
         }
     }
 
-    pub async fn execute_command(command: Command) -> Response {
+    pub async fn execute_command(&mut self, command: Command) -> Response {
         match command {
             Command::InvalidCommand => Response::InvalidCommand,
             Command::InternalError => Response::InternalError,
             Command::ShutdownConnection => Response::ShutdownConnection,
             Command::EchoU8(n) => Response::EchoU8(n),
+            Command::AesEncrypt { buf, base_nonce, block_idx } => {
+                todo!()
+            }
+            Command::AesDecrypt { buf, base_nonce, block_idx } => {
+                todo!()
+            }
+            Command::NewNonce => {
+                todo!()
+            }
         }
     }
 }

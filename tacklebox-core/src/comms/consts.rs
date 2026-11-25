@@ -5,3 +5,7 @@ pub const MAX_MESSAGE_SIZE: usize = 256;
 // The size of the COBS frame needed to hold the biggest message
 // max COBS frame size = payload + 1 byte per 254 + 1 byte (trailing 0x00)
 pub const MAX_FRAME_SIZE: usize = MAX_MESSAGE_SIZE + MAX_MESSAGE_SIZE.div_ceil(254) + 1;
+
+
+pub const BASE_NONCE_LEN: usize = 12;
+pub const BLOCK_SIZE: usize = 128;
