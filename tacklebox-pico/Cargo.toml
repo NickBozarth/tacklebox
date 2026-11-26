@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+at-cryptoauth = "0.6.0"
 cortex-m-rt = "0.7.6"
 embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread"] }
 embassy-futures = "0.1.2"

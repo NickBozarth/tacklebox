@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde_with::{serde_as, Bytes};
 
-use crate::comms::consts::MAX_FRAME_SIZE;
+use crate::comms::consts::{BASE_NONCE_LEN, BLOCK_SIZE, MAX_FRAME_SIZE};
 use crate::comms::errors::{MessageError, MessageResult};
 
 
@@ -28,6 +29,7 @@ pub trait Message:
  * - Host sends Response(s) to Client
  * - Client handles Response
  */
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub enum Command {
     #[default]
@@ -36,12 +38,26 @@ pub enum Command {
 
     EchoU8(u8),
     ShutdownConnection,
+
+    AesEncrypt {
+        #[serde_as(as = "Bytes")]
+        buf: [u8; BLOCK_SIZE],
+        base_nonce: Option<[u8; BASE_NONCE_LEN]>,
+        block_idx: u32
+    },
+    AesDecrypt {
+        #[serde_as(as = "Bytes")]
+        buf: [u8; BLOCK_SIZE],
+        base_nonce: [u8; BASE_NONCE_LEN],
+        block_idx: u32
+    },
 }
 
 impl Message for Command {}
 
 
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub enum Response {
     #[default]
@@ -50,6 +66,17 @@ pub enum Response {
 
     EchoU8(u8),
     ShutdownConnection,
+
+    CryptoError,
+    AesEncrypt(
+        #[serde_as(as = "Bytes")]
+        [u8; BLOCK_SIZE],
+        [u8; BASE_NONCE_LEN]
+    ),
+    AesDecrypt(
+        #[serde_as(as = "Bytes")]
+        [u8; BLOCK_SIZE],
+    ),
 }
 
 impl Message for Response {}
