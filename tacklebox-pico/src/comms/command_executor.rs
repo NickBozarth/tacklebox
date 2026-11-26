@@ -5,7 +5,7 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use heapless::{arc_pool, pool::arc::{Arc, ArcBlock}};
 use tacklebox_core::comms::messages::{Command, Response};
 
-use crate::crypto::startup::AtCaClientAsync;
+use crate::crypto::{cipher::Cipher, startup::{AES_KEY_SLOT, AtCaClientAsync}};
 
 
 type ResponseSignal = Signal<CriticalSectionRawMutex, Response>;
@@ -89,10 +89,24 @@ impl CommandExecutor<'_> {
             Command::ShutdownConnection => Response::ShutdownConnection,
             Command::EchoU8(n) => Response::EchoU8(n),
             Command::AesEncrypt { buf, base_nonce, block_idx } => {
-                todo!()
+                let res = Cipher::encrypt_cipher(&buf, base_nonce.as_ref(), block_idx)
+                    .encrypt(&self.atca, AES_KEY_SLOT)
+                    .await;
+
+                match res {
+                    Ok((buf, nonce)) => Response::AesEncrypt(buf, nonce),
+                    Err(_) => Response::CryptoError
+                }
             }
             Command::AesDecrypt { buf, base_nonce, block_idx } => {
-                todo!()
+                let res = Cipher::decrypt_cipher(&buf, &base_nonce, block_idx)
+                    .decrypt(&self.atca, AES_KEY_SLOT)
+                    .await;
+
+                match res {
+                    Ok(buf) => Response::AesDecrypt(*buf),
+                    Err(_) => Response::CryptoError
+                }
             }
         }
     }

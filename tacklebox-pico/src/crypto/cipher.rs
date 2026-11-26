@@ -114,7 +114,7 @@ impl<T> Cipher<T> {
 }
 
 impl Cipher<Encrypt> {
-    pub fn new_encrypt(
+    pub fn encrypt_cipher(
         buf_ref: &[u8; 128],
         base_nonce_ref: Option<&[u8; BASE_NONCE_LEN]>,
         block_idx: u32
@@ -139,7 +139,7 @@ impl Cipher<Encrypt> {
         self,
         atca: &AtCaClientAsync<'_>,
         slot: Slot
-    ) -> CipherResult<Zeroizing<[u8; BLOCK_SIZE]>> {
+    ) -> CipherResult<([u8; BLOCK_SIZE], [u8; BASE_NONCE_LEN])> {
         let base_nonce = self.base_nonce(atca).await;
 
         self.run_ctr(
@@ -149,11 +149,12 @@ impl Cipher<Encrypt> {
             || CipherError::EncryptError
         )
             .await
+            .map(|buf| (*buf, *base_nonce))
     }
 }
 
 impl Cipher<Decrypt> {
-    pub fn new_decrypt(
+    pub fn decrypt_cipher(
         buf_ref: &[u8; 128],
         base_nonce_ref: &[u8; BASE_NONCE_LEN],
         block_idx: u32

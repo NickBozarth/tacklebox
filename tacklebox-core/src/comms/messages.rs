@@ -71,7 +71,7 @@ pub enum Response {
     AesEncrypt(
         #[serde_as(as = "Bytes")]
         [u8; BLOCK_SIZE],
-        Option<[u8; BASE_NONCE_LEN]>
+        [u8; BASE_NONCE_LEN]
     ),
     AesDecrypt(
         #[serde_as(as = "Bytes")]
