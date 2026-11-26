@@ -6,6 +6,7 @@ use tokio_serial::SerialStream;
 
 
 pub type CommunicationResult<T> = Result<T, CommunicationError>;
+#[derive(Debug, PartialEq)]
 pub enum CommunicationError {
     WriteError(MessageWriterError),
     ReadError(MessageReaderError),
