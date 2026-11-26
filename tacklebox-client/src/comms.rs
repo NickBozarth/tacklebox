@@ -1,8 +1,26 @@
 use std::time::Duration;
 
-use tacklebox_core::comms::{consts::MAX_PACKET_SIZE, errors::{MessageReaderError, MessageReaderResult, MessageWriterError, MessageWriterResult}, messages::{Command, Response}, reader::{FrameReader, MessageReader}, writer::MessageWriter};
+use tacklebox_core::comms::{consts::{BASE_NONCE_LEN, BLOCK_SIZE, MAX_PACKET_SIZE}, errors::{MessageReaderError, MessageReaderResult, MessageWriterError, MessageWriterResult}, messages::{Command, Response}, reader::{FrameReader, MessageReader}, writer::MessageWriter};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_serial::SerialStream;
+
+
+pub type CommunicationResult<T> = Result<T, CommunicationError>;
+pub enum CommunicationError {
+    WriteError(MessageWriterError),
+    ReadError(MessageReaderError),
+    CryptoError,
+    IncorrectVariantReceived(Response)
+}
+
+impl From<MessageWriterError> for CommunicationError {
+    fn from(e: MessageWriterError) -> Self { Self::WriteError(e) }
+}
+
+impl From<MessageReaderError> for CommunicationError {
+    fn from(e: MessageReaderError) -> Self { Self::ReadError(e) }
+}
+
 
 pub struct TokioSerialConnecion {
     stream: SerialStream,
@@ -22,6 +40,69 @@ impl TokioSerialConnecion {
             stream,
             frame_reader: FrameReader::new()
         })
+    }
+
+
+    pub async fn read_write_mesage(&mut self, command: Command) -> CommunicationResult<Response> {
+        self.write_message(&command).await?;
+        self.read_message()
+            .await
+            .map_err(CommunicationError::from)
+    }
+
+    async fn crypto(
+        &mut self,
+        buf: &[u8],
+        mut nonce: Option<[u8; BASE_NONCE_LEN]>
+    ) -> CommunicationResult<(Vec<u8>, [u8; BASE_NONCE_LEN])> {
+        let mut enc = Vec::new();
+
+        let (chunks, rem) = buf.as_chunks::<BLOCK_SIZE>();
+        let padded_rem = (!rem.is_empty()).then(|| {
+            let mut last = [0u8; BLOCK_SIZE];
+            last[..rem.len()].copy_from_slice(rem);
+            last
+        });
+
+        for (i, chunk) in chunks.iter().copied().chain(padded_rem).enumerate() {
+            self.write_message(&Command::AesEncrypt {
+                buf: chunk,
+                base_nonce: nonce,
+                block_idx: i as u32
+            })
+                .await?;
+
+            match self.read_message().await? {
+                Response::AesEncrypt(cipher, nonce_resp) => {
+                    if nonce.is_none() {
+                        nonce = Some(nonce_resp);
+                    }
+                    enc.extend_from_slice(&cipher);
+                }
+                Response::CryptoError => return Err(CommunicationError::CryptoError),
+                v => return Err(CommunicationError::IncorrectVariantReceived(v)),
+            }
+        }
+
+        enc.truncate(buf.len());
+        Ok((enc, nonce.unwrap_or([0u8; BASE_NONCE_LEN])))
+    }
+
+    pub async fn encrypt_buffer(
+        &mut self,
+        buf: &[u8]
+    ) -> CommunicationResult<(Vec<u8>, [u8; BASE_NONCE_LEN])> {
+        self.crypto(buf, None).await
+    }
+
+    pub async fn decrypt_buffer(
+        &mut self,
+        buf: &[u8],
+        nonce: [u8; BASE_NONCE_LEN]
+    ) -> CommunicationResult<Vec<u8>> {
+        self.crypto(buf, Some(nonce))
+            .await
+            .map(|(buf, _nonce)| buf)
     }
 }
 
