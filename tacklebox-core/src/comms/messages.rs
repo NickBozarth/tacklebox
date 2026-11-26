@@ -42,7 +42,7 @@ pub enum Command {
     AesEncrypt {
         #[serde_as(as = "Bytes")]
         buf: [u8; BLOCK_SIZE],
-        base_nonce: [u8; BASE_NONCE_LEN],
+        base_nonce: Option<[u8; BASE_NONCE_LEN]>,
         block_idx: u32
     },
     AesDecrypt {
@@ -51,7 +51,6 @@ pub enum Command {
         base_nonce: [u8; BASE_NONCE_LEN],
         block_idx: u32
     },
-    NewNonce,
 }
 
 impl Message for Command {}
@@ -72,12 +71,12 @@ pub enum Response {
     AesEncrypt(
         #[serde_as(as = "Bytes")]
         [u8; BLOCK_SIZE],
+        Option<[u8; BASE_NONCE_LEN]>
     ),
     AesDecrypt(
         #[serde_as(as = "Bytes")]
         [u8; BLOCK_SIZE],
     ),
-    NewNonce([u8; BASE_NONCE_LEN]),
 }
 
 impl Message for Response {}

@@ -94,9 +94,6 @@ impl CommandExecutor<'_> {
             Command::AesDecrypt { buf, base_nonce, block_idx } => {
                 todo!()
             }
-            Command::NewNonce => {
-                todo!()
-            }
         }
     }
 }
